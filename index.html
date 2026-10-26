@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Насмотренность</title>
+<link rel="preconnect" href="https://upload.wikimedia.org">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<main id="app"></main>
+<script src="js/firebase-config.js"></script>
+<script>
+  if (window.FIREBASE_CONFIG) ['app', 'auth', 'firestore'].forEach(m =>
+    document.write(`<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-${m}-compat.js"><\/script>`));
+</script>
+<script src="data/paintings.js"></script>
+<script src="js/curriculum.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,487 @@
+[
+ {
+  "name": "Hieronymus Bosch",
+  "qid": "Q130531",
+  "count": 111
+ },
+ {
+  "name": "Pieter Bruegel the Elder",
+  "qid": null,
+  "count": 0
+ },
+ {
+  "name": "Albrecht Dürer",
+  "qid": "Q5580",
+  "count": 357
+ },
+ {
+  "name": "Jan van Eyck",
+  "qid": "Q102272",
+  "count": 56
+ },
+ {
+  "name": "Hans Holbein the Younger",
+  "qid": "Q48319",
+  "count": 205
+ },
+ {
+  "name": "Lucas Cranach the Elder",
+  "qid": "Q191748",
+  "count": 963
+ },
+ {
+  "name": "Sandro Botticelli",
+  "qid": "Q5669",
+  "count": 184
+ },
+ {
+  "name": "Raphael",
+  "qid": "Q5597",
+  "count": 267
+ },
+ {
+  "name": "Titian",
+  "qid": "Q47551",
+  "count": 407
+ },
+ {
+  "name": "Leonardo da Vinci",
+  "qid": "Q762",
+  "count": 729
+ },
+ {
+  "name": "Giovanni Bellini",
+  "qid": "Q17169",
+  "count": 186
+ },
+ {
+  "name": "Andrea Mantegna",
+  "qid": "Q5681",
+  "count": 122
+ },
+ {
+  "name": "El Greco",
+  "qid": "Q301",
+  "count": 518
+ },
+ {
+  "name": "Agnolo Bronzino",
+  "qid": "Q7803",
+  "count": 118
+ },
+ {
+  "name": "Parmigianino",
+  "qid": "Q9348",
+  "count": 103
+ },
+ {
+  "name": "Caravaggio",
+  "qid": "Q42207",
+  "count": 105
+ },
+ {
+  "name": "Rembrandt",
+  "qid": "Q5598",
+  "count": 1217
+ },
+ {
+  "name": "Peter Paul Rubens",
+  "qid": "Q5599",
+  "count": 1667
+ },
+ {
+  "name": "Diego Velázquez",
+  "qid": "Q297",
+  "count": 188
+ },
+ {
+  "name": "Johannes Vermeer",
+  "qid": "Q41264",
+  "count": 36
+ },
+ {
+  "name": "Frans Hals",
+  "qid": "Q167654",
+  "count": 301
+ },
+ {
+  "name": "Artemisia Gentileschi",
+  "qid": "Q212657",
+  "count": 132
+ },
+ {
+  "name": "Francisco de Zurbarán",
+  "qid": "Q209615",
+  "count": 306
+ },
+ {
+  "name": "Antoine Watteau",
+  "qid": "Q183221",
+  "count": 198
+ },
+ {
+  "name": "François Boucher",
+  "qid": "Q180932",
+  "count": 418
+ },
+ {
+  "name": "Jean-Honoré Fragonard",
+  "qid": "Q127171",
+  "count": 263
+ },
+ {
+  "name": "Canaletto",
+  "qid": "Q182664",
+  "count": 459
+ },
+ {
+  "name": "Giovanni Battista Tiepolo",
+  "qid": "Q186202",
+  "count": 346
+ },
+ {
+  "name": "Jacques-Louis David",
+  "qid": "Q83155",
+  "count": 296
+ },
+ {
+  "name": "Jean-Auguste-Dominique Ingres",
+  "qid": "Q23380",
+  "count": 276
+ },
+ {
+  "name": "Eugène Delacroix",
+  "qid": "Q33477",
+  "count": 501
+ },
+ {
+  "name": "J. M. W. Turner",
+  "qid": "Q159758",
+  "count": 859
+ },
+ {
+  "name": "Caspar David Friedrich",
+  "qid": "Q104884",
+  "count": 340
+ },
+ {
+  "name": "Francisco Goya",
+  "qid": "Q5432",
+  "count": 679
+ },
+ {
+  "name": "Théodore Géricault",
+  "qid": "Q184212",
+  "count": 261
+ },
+ {
+  "name": "Ivan Aivazovsky",
+  "qid": "Q181568",
+  "count": 331
+ },
+ {
+  "name": "Gustave Courbet",
+  "qid": "Q34618",
+  "count": 591
+ },
+ {
+  "name": "Jean-François Millet",
+  "qid": "Q148458",
+  "count": 231
+ },
+ {
+  "name": "Ilya Repin",
+  "qid": "Q172911",
+  "count": 282
+ },
+ {
+  "name": "Jean-Baptiste-Camille Corot",
+  "qid": "Q148475",
+  "count": 1076
+ },
+ {
+  "name": "Ivan Shishkin",
+  "qid": "Q193064",
+  "count": 234
+ },
+ {
+  "name": "Isaac Levitan",
+  "qid": "Q211356",
+  "count": 172
+ },
+ {
+  "name": "Honoré Daumier",
+  "qid": "Q187506",
+  "count": 2548
+ },
+ {
+  "name": "Dante Gabriel Rossetti",
+  "qid": "Q186748",
+  "count": 124
+ },
+ {
+  "name": "John William Waterhouse",
+  "qid": "Q212754",
+  "count": 140
+ },
+ {
+  "name": "John Everett Millais",
+  "qid": "Q159606",
+  "count": 233
+ },
+ {
+  "name": "Edward Burne-Jones",
+  "qid": "Q216406",
+  "count": 245
+ },
+ {
+  "name": "William-Adolphe Bouguereau",
+  "qid": "Q483992",
+  "count": 316
+ },
+ {
+  "name": "Alexandre Cabanel",
+  "qid": "Q310437",
+  "count": 88
+ },
+ {
+  "name": "Lawrence Alma-Tadema",
+  "qid": "Q240526",
+  "count": 173
+ },
+ {
+  "name": "Claude Monet",
+  "qid": "Q296",
+  "count": 1268
+ },
+ {
+  "name": "Pierre-Auguste Renoir",
+  "qid": "Q39931",
+  "count": 2154
+ },
+ {
+  "name": "Edgar Degas",
+  "qid": "Q46373",
+  "count": 519
+ },
+ {
+  "name": "Camille Pissarro",
+  "qid": "Q134741",
+  "count": 833
+ },
+ {
+  "name": "Alfred Sisley",
+  "qid": "Q175130",
+  "count": 817
+ },
+ {
+  "name": "Berthe Morisot",
+  "qid": "Q105320",
+  "count": 198
+ },
+ {
+  "name": "Gustave Caillebotte",
+  "qid": "Q295144",
+  "count": 243
+ },
+ {
+  "name": "Édouard Manet",
+  "qid": "Q40599",
+  "count": 430
+ },
+ {
+  "name": "Vincent van Gogh",
+  "qid": "Q5582",
+  "count": 999
+ },
+ {
+  "name": "Paul Cézanne",
+  "qid": "Q35548",
+  "count": 759
+ },
+ {
+  "name": "Paul Gauguin",
+  "qid": "Q37693",
+  "count": 716
+ },
+ {
+  "name": "Henri de Toulouse-Lautrec",
+  "qid": "Q82445",
+  "count": 534
+ },
+ {
+  "name": "Georges Seurat",
+  "qid": "Q34013",
+  "count": 175
+ },
+ {
+  "name": "Paul Signac",
+  "qid": "Q151573",
+  "count": 201
+ },
+ {
+  "name": "Henri-Edmond Cross",
+  "qid": "Q555224",
+  "count": 76
+ },
+ {
+  "name": "Odilon Redon",
+  "qid": "Q154349",
+  "count": 366
+ },
+ {
+  "name": "Gustave Moreau",
+  "qid": "Q203828",
+  "count": 150
+ },
+ {
+  "name": "Arnold Böcklin",
+  "qid": "Q123071",
+  "count": 225
+ },
+ {
+  "name": "Mikhail Vrubel",
+  "qid": "Q215100",
+  "count": 26
+ },
+ {
+  "name": "Gustav Klimt",
+  "qid": "Q34661",
+  "count": 172
+ },
+ {
+  "name": "Alphonse Mucha",
+  "qid": "Q146691",
+  "count": 56
+ },
+ {
+  "name": "Egon Schiele",
+  "qid": "Q44032",
+  "count": 118
+ },
+ {
+  "name": "Édouard Vuillard",
+  "qid": "Q239394",
+  "count": 559
+ },
+ {
+  "name": "Pierre Bonnard",
+  "qid": "Q26408",
+  "count": 457
+ },
+ {
+  "name": "Henri Matisse",
+  "qid": "Q5589",
+  "count": 487
+ },
+ {
+  "name": "André Derain",
+  "qid": "Q156272",
+  "count": 76
+ },
+ {
+  "name": "Maurice de Vlaminck",
+  "qid": "Q241098",
+  "count": 3
+ },
+ {
+  "name": "Edvard Munch",
+  "qid": "Q41406",
+  "count": 1893
+ },
+ {
+  "name": "Ernst Ludwig Kirchner",
+  "qid": "Q229272",
+  "count": 367
+ },
+ {
+  "name": "Franz Marc",
+  "qid": "Q44054",
+  "count": 215
+ },
+ {
+  "name": "Wassily Kandinsky",
+  "qid": "Q61064",
+  "count": 441
+ },
+ {
+  "name": "Pablo Picasso",
+  "qid": "Q5593",
+  "count": 4
+ },
+ {
+  "name": "Georges Braque",
+  "qid": "Q153793",
+  "count": 2
+ },
+ {
+  "name": "Juan Gris",
+  "qid": "Q151152",
+  "count": 214
+ },
+ {
+  "name": "Kazimir Malevich",
+  "qid": "Q130777",
+  "count": 165
+ },
+ {
+  "name": "Piet Mondrian",
+  "qid": "Q151803",
+  "count": 581
+ },
+ {
+  "name": "Giorgio de Chirico",
+  "qid": "Q156622",
+  "count": 3
+ },
+ {
+  "name": "Katsushika Hokusai",
+  "qid": "Q5586",
+  "count": 155
+ },
+ {
+  "name": "Utagawa Hiroshige",
+  "qid": "Q200798",
+  "count": 63
+ },
+ {
+  "name": "Kitagawa Utamaro",
+  "qid": "Q272045",
+  "count": 18
+ },
+ {
+  "name": "Henri Rousseau",
+  "qid": "Q156386",
+  "count": 140
+ },
+ {
+  "name": "Arkhip Kuindzhi",
+  "qid": "Q353628",
+  "count": 78
+ },
+ {
+  "name": "Valentin Serov",
+  "qid": "Q217128",
+  "count": 70
+ },
+ {
+  "name": "Vasily Surikov",
+  "qid": "Q110228",
+  "count": 19
+ },
+ {
+  "name": "Viktor Vasnetsov",
+  "qid": "Q204138",
+  "count": 42
+ },
+ {
+  "name": "René Magritte",
+  "qid": "Q7836",
+  "count": 2
+ },
+ {
+  "name": "Salvador Dalí",
+  "qid": "Q5577",
+  "count": 5
+ }
+]
