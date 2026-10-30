@@ -43,30 +43,31 @@ img.broken { min-height: 120px; min-width: 120px; }
 .intro-head { margin-bottom: 10px; }
 .viewer { display: flex; align-items: center; gap: 6px; }
 .viewer figure { flex: 1; min-width: 0; }
-.viewer img { max-height: 64vh; object-fit: contain; }
+.viewer img { width: 100%; height: 60vh; height: 60dvh; object-fit: contain; }
 .arrow { font-size: 1.8em; padding: 4px 12px; margin: 0; background: none; border: none; }
 .dots { text-align: center; margin: 4px 0; }
 .dots span { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin: 0 4px; cursor: pointer; }
 .dots span.on { background: var(--accent); }
 
-/* квиз */
-.bar { height: 3px; background: var(--line); border-radius: 2px; margin-bottom: 14px; }
+/* квиз: вопрос занимает ровно экран, рамки картин фиксированы — пропорции картины не двигают вёрстку */
+.bar { height: 3px; background: var(--line); border-radius: 2px; margin-bottom: 10px; flex: none; }
 .bar div { height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s; }
-.prompt { font-family: var(--serif); font-size: 1.6em; margin-bottom: 12px; }
+.stage { display: flex; flex-direction: column; height: calc(100vh - 32px); height: calc(100dvh - 32px); min-height: 440px; }
+.prompt { font-family: var(--serif); font-size: 1.5em; line-height: 1.25; margin-bottom: 10px; flex: none; }
 .tag { font-family: system-ui, sans-serif; font-size: .5em; vertical-align: middle; border: 1px solid var(--accent); color: var(--accent); padding: 2px 8px; border-radius: 10px; margin-right: 10px; text-transform: uppercase; letter-spacing: .08em; }
-figure.main img { max-height: 62vh; object-fit: contain; }
-.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
-.opts button { margin: 0; text-align: left; padding: 16px 20px; min-height: 64px; font-size: 1.08em; }
+.frame { position: relative; flex: 1 1 0; min-height: 0; margin: 0; }
+.frame > img, .grid .pic img { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; object-fit: contain; background: none; }
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; flex: none; }
+.opts button { margin: 0; text-align: left; padding: 12px 18px; min-height: 64px; font-size: 1.08em; line-height: 1.25; }
 .opts.long { grid-template-columns: 1fr; }
-.opts.long button { font-size: .98em; min-height: 56px; }
+.opts.long button { font-size: .98em; min-height: 52px; }
 .num { display: inline-block; color: var(--muted); font-size: .8em; margin-right: 10px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.grid .pic { margin: 0; padding: 6px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 160px; }
-.grid .pic img { max-height: 34vh; max-width: 100%; object-fit: contain; }
-.grid .pic .num { position: absolute; top: 6px; left: 8px; background: rgba(0,0,0,.6); padding: 0 6px; border-radius: 4px; }
-.grid .who { font-size: .85em; margin-top: 6px; }
-.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; }
-.pair img { max-height: 52vh; object-fit: contain; }
+.grid { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; }
+.grid .pic { margin: 0; padding: 0; position: relative; min-height: 0; overflow: hidden; }
+.grid .pic img { inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); }
+.grid .pic .num { position: absolute; top: 6px; left: 8px; z-index: 1; background: rgba(0,0,0,.6); padding: 0 6px; border-radius: 4px; }
+.grid .who { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; font-size: .78em; line-height: 1.25; padding: 4px 6px; background: rgba(13,12,11,.85); }
+.pair { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .opts.two { grid-template-columns: 1fr 1fr; }
 button.right { border-color: var(--ok) !important; background: rgba(111,174,122,.15); }
 button.wrong { border-color: var(--bad) !important; background: rgba(208,103,90,.15); }
@@ -108,8 +109,15 @@ button.chosen { border-color: var(--accent); }
   body { font-size: 18px; }
   .meter { width: 50px; }
   h1 { font-size: 1.9em; }
-  .opts { grid-template-columns: 1fr; }
-  .opts.two { grid-template-columns: 1fr 1fr; }
+  main { padding-top: 10px; }
+  .stage { height: calc(100vh - 20px); height: calc(100dvh - 20px); min-height: 400px; }
+  .prompt { font-size: 1.15em; margin-bottom: 8px; }
+  .opts { gap: 6px; margin-top: 8px; }
+  .opts button { padding: 8px 10px; min-height: 58px; font-size: .9em; }
+  .opts.long button { min-height: 46px; font-size: .86em; }
+  .opts .num { display: none; }
+  .grid { gap: 6px; }
+  .viewer img { height: 50vh; height: 50dvh; }
   .compare { grid-template-columns: 1fr; }
   .arrow { display: none; }
   .art .nm { min-width: 0; width: 100%; }

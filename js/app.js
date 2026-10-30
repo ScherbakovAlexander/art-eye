@@ -135,15 +135,17 @@
     const pics = Q.grid
       ? `<div class="grid">${Q.paintings.map((p, j) => `<button class="pic" data-v="${p.id}" onclick="App._pick('${p.id}')"><span class="num">${j + 1}</span>${img(p, 500)}</button>`).join('')}</div>`
       : Q.pairView
-        ? `<div class="pair">${Q.paintings.map(p => `<figure>${img(p, 500)}</figure>`).join('')}</div>`
-        : `<figure class="main">${img(Q.paintings[0])}</figure>`;
+        ? `<div class="pair">${Q.paintings.map(p => `<figure class="frame">${img(p, 500)}</figure>`).join('')}</div>`
+        : `<figure class="frame">${img(Q.paintings[0])}</figure>`;
     const opts = Q.grid ? '' : `<div class="opts ${Q.options.length === 2 ? 'two' : ''} ${Q.longOpts ? 'long' : ''}">${Q.options.map((o, j) => `<button data-v="${o.v}" onclick="App._pick('${o.v}')"><span class="num">${j + 1}</span>${o.label}</button>`).join('')}</div>`;
     App._pick = v => { if (App._locked) return; App._locked = true; onPick(isNaN(v) || Q.type !== 'era' ? v : +v); };
     App._locked = false;
     render(`<div class="quiz ${exam ? 'is-exam' : ''}">
-        <div class="bar"><div style="width:${pct(progress)}"></div></div>
-        <div class="prompt">${exam ? '<span class="tag">экзамен</span>' : ''}${Q.prompt}</div>
-        ${pics}${opts}<div id="fb"></div></div>`, e => {
+        <div class="stage">
+          <div class="bar"><div style="width:${pct(progress)}"></div></div>
+          <div class="prompt">${exam ? '<span class="tag">экзамен</span>' : ''}${Q.prompt}</div>
+          ${pics}${opts}
+        </div><div id="fb"></div></div>`, e => {
       const n = +e.key; if (n >= 1 && n <= Q.options.length) App._pick(String(Q.options[n - 1].v));
     });
   }
