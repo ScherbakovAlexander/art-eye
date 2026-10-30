@@ -45,8 +45,9 @@
     else plan = `Повторение${s.due ? ` — ждут: ${s.due}` : ' и практика'}. <span class="muted">${r.why}.</span>`;
     const examCard = ex.need ? `<div class="card exam">
         <h3>Экзамен</h3>
-        <p>Вы открыли ${E.S.gate.sinceExam} новых художников с прошлого экзамена. Экзамен — только невиденные картины, без подсказок. Нужно 80%, чтобы открыть следующих.</p>
-        ${ex.canTake ? `<button class="primary" onclick="App.exam()">Сдать экзамен</button>` : `<p class="muted">Пересдача откроется после одного занятия.</p>`}
+        <p>Вы открыли ${E.S.gate.sinceExam} новых художников с прошлого экзамена. Экзамен — только невиденные картины, без подсказок, нужно 80%.
+        ${ex.block ? 'Пока он не сдан, новые художники не открываются.' : `Можно сдать сейчас; без экзамена откроется ещё ${ex.left} худ.`}</p>
+        ${ex.canTake ? `<button class="${ex.block ? 'primary' : ''}" onclick="App.exam()">Сдать экзамен</button>` : `<p class="muted">Пересдача откроется после одного занятия.</p>`}
       </div>` : '';
     render(`${nav()}
       <header class="hero"><h1>Насмотренность</h1><p class="muted">Учимся узнавать художников и стили — по картинам, которые видим впервые.</p></header>
@@ -295,7 +296,7 @@
   function settings() {
     const st = E.S.settings;
     render(`${nav()}<h2>Настройки</h2><div class="card">
-      <label>Новых художников в день <input type="number" min="1" max="10" value="${st.newPerDay}" onchange="App._set('newPerDay',this.value)"></label>
+      <label>Новых художников в день <input type="number" min="1" max="15" value="${st.newPerDay}" onchange="App._set('newPerDay',this.value)"></label>
       <label>Вопросов в занятии <input type="number" min="5" max="50" value="${st.sessionLen}" onchange="App._set('sessionLen',this.value)"></label></div>
       <div class="card"><h4>Сохранение прогресса</h4><p class="muted small">Прогресс хранится в этом браузере. Можно перенести файлом.</p>
       <button onclick="App._export()">Скачать прогресс</button>

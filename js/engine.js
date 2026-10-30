@@ -6,7 +6,7 @@
   const KEY = 'arteye.v1';
   const DAY = 864e5;
   const now = () => Date.now();
-  const today = () => new Date().toISOString().slice(0, 10);
+  const today = () => new Date(now()).toISOString().slice(0, 10);
 
   // ---------- данные ----------
   const A = {};          // qid -> artist (+ paintings)
@@ -29,16 +29,18 @@
       v: 1, artists: {}, seen: {}, conf: {}, log: [], exams: [], movSeen: {}, broken: {},
       day: { d: today(), intro: 0, answers: 0, correct: 0 },
       gate: { sinceExam: 0, failedAt: 0, sessionsSinceFail: 0 },
-      settings: { newPerDay: 3, sessionLen: 15 },
+      settings: { newPerDay: 6, sessionLen: 15 },
       skill: {},          // по типу вопроса: { n, ok, recent[], d } — d ∈ [0,1] сложность этого типа
       updatedAt: 0, owner: null
     };
   }
   let S = load();
   function load() {
-    try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return Object.assign(fresh(), s); } catch (e) { }
+    try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return migrate(Object.assign(fresh(), s)); } catch (e) { }
     return fresh();
   }
+  // старый дневной лимит 3 тормозил после разгона — поднимаем один раз
+  function migrate(s) { if (!s.bal2) { s.settings.newPerDay = Math.max(6, s.settings.newPerDay); s.day.intro = 0; s.bal2 = 1; } return s; }
   let onSave = null;
   function save() {
     S.updatedAt = now();
@@ -54,9 +56,12 @@
   // stab — «стабильность» в днях: через сколько пора повторить. Верный ответ растит её тем сильнее,
   // чем дольше прошло с прошлого раза (повтор раньше срока почти ничего не даёт), ошибка — резко режет.
   function introduce(q) {
+    rollDay();
+    // художники разгона не тратят дневной лимит
+    if (known().length >= WARMUP) S.day.intro++;
     S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [] };
     S.movSeen[A[q].m] = S.movSeen[A[q].m] || now();
-    S.day.intro++; S.gate.sinceExam++;
+    S.gate.sinceExam++;
     save();
   }
   function grade(q, ok, weight = 1) {
@@ -121,30 +126,37 @@
       .sort((a, b) => a.score - b.score)[0].q;
   }
   const WARMUP = 10;
+  // Экзамен предлагается после 8 новых художников, но обязательным становится только после 14
+  // (или после провала) — до этого новые художники продолжают открываться.
   function examStatus() {
-    const k = known().length;
-    const need = k >= WARMUP && S.gate.sinceExam >= 6;
+    const k = known().length, n = S.gate.sinceExam;
+    const need = k >= WARMUP && (n >= 8 || !!S.gate.failedAt);
+    const block = need && (n >= 14 || !!S.gate.failedAt);
     const canTake = need && (!S.gate.failedAt || S.gate.sessionsSinceFail >= 1);
-    return { need, canTake };
+    return { need, block, canTake, left: Math.max(0, 14 - n) };
+  }
+  // «закреплён» — уже несколько раз узнан и последние ответы в основном верные (время не нужно ждать)
+  function settled(q) {
+    const s = st(q);
+    return s.stab >= 1 || (s.ok >= 3 && avg(s.recent.slice(-5)) >= 0.6);
   }
   function introReason() {
     rollDay();
     const k = known(), p = pace();
     if (!k.length) return { ok: true, count: 4 };
     if (!ORDER.some(q => !S.artists[q])) return { ok: false, why: 'Все художники открыты' };
+    if (p.mode === 'easy') return { ok: false, why: `Точность ${Math.round(p.acc * 100)}% — упрощаем: сначала закрепим знакомых` };
     // разгон: быстро набираем первые 10 художников, без дневного лимита
-    if (k.length < WARMUP) {
-      if (p.mode === 'easy') return { ok: false, why: 'Точность ниже 65% — сначала закрепим знакомых' };
-      return { ok: true, count: Math.min(p.mode === 'fast' ? 4 : 3, WARMUP - k.length), warmup: true };
-    }
-    if (examStatus().need) return { ok: false, why: 'Сдайте экзамен, чтобы открыть новых художников' };
-    if (p.mode === 'easy') return { ok: false, why: `Точность ${Math.round(p.acc * 100)}% — упрощаем: только повторение` };
-    const limit = S.settings.newPerDay + (p.mode === 'fast' ? 3 : 0);
-    if (S.day.intro >= limit) return { ok: false, why: 'Лимит новых художников на сегодня' };
-    const shaky = k.filter(q => st(q).stab < 1).length;
-    if (shaky >= (p.mode === 'fast' ? 6 : 4)) return { ok: false, why: 'Сначала закрепите недавних художников' };
-    if (dueList().length > 15) return { ok: false, why: 'Много художников ждут повторения' };
-    return { ok: true, count: p.mode === 'fast' ? 2 : 1 };
+    if (k.length < WARMUP) return { ok: true, count: Math.min(p.mode === 'fast' ? 4 : 3, WARMUP - k.length), warmup: true };
+    if (examStatus().block) return { ok: false, why: 'Сдайте экзамен, чтобы открыть новых художников' };
+    // сколько новых за занятие — по точности: 85%+ → 3, 75%+ → 2, иначе 1
+    const byAcc = p.acc == null ? 2 : p.acc >= 0.85 ? 3 : p.acc >= 0.75 ? 2 : 1;
+    const dayLeft = S.settings.newPerDay + (p.mode === 'fast' ? 3 : 0) - S.day.intro;
+    if (dayLeft <= 0) return { ok: false, why: 'Лимит новых художников на сегодня' };
+    const shakyLeft = (p.mode === 'fast' ? 6 : 4) - k.filter(q => !settled(q)).length;
+    if (shakyLeft <= 0) return { ok: false, why: 'Сначала закрепите недавних художников' };
+    if (dueList().length > 20) return { ok: false, why: 'Много художников ждут повторения' };
+    return { ok: true, count: Math.min(byAcc, dayLeft, shakyLeft) };
   }
 
   // ---------- выбор картин ----------
@@ -185,30 +197,34 @@
   // ---------- вопросы ----------
   // label — для статистики; w — вес в обычном занятии (чаще всего «кто автор»), we — в экзамене
   const TYPES = {
-    who: { label: 'Кто автор', min: 2, w: 6, we: 6 },
+    who: { label: 'Кто автор', min: 2, w: 5, we: 6 },
     find: { label: 'Найти картину художника', min: 4, w: 2, we: 2 },
     trait: { label: 'Стиль художника (описание)', min: 4, w: 1.2, we: 1 },
-    movement: { label: 'Стиль картины (направление)', min: 4, movs: 2, w: 1.5, we: 1.5 },
-    findMov: { label: 'Найти картину направления', min: 5, movs: 4, w: 0.8, we: 0.8 },
+    movement: { label: 'Стиль картины (направление)', min: 4, movs: 2, w: 1.8, we: 1.5 },
+    findMov: { label: 'Найти картину направления', min: 5, movs: 4, w: 1, we: 0.8 },
     odd: { label: 'Лишняя картина', min: 5, w: 1.5, we: 2 },
-    pair: { label: 'Один ли художник', min: 7, w: 1, we: 1 },
-    era: { label: 'Когда написана', min: 6, w: 0.8, we: 0 },
+    pair: { label: 'Один ли художник', min: 7, w: 1.2, we: 1 },
+    era: { label: 'Когда написана', min: 6, w: 1, we: 0 },
     title: { label: 'Название картины', min: 3, w: 0.4, we: 0 }
   };
   function availableTypes() {
     const k = known(), movs = new Set(k.map(q => A[q].m)).size;
     return Object.keys(TYPES).filter(t => k.length >= TYPES[t].min && (!TYPES[t].movs || movs >= TYPES[t].movs));
   }
-  function chooseType(q, exam) {
+  function chooseType(q, exam, recentTypes = []) {
     const av = availableTypes();
     const s = st(q);
-    // свежему художнику — только «кто автор», чтобы закрепить связь картина→имя
-    if (!exam && s && s.n < 3) return 'who';
+    // первый вопрос о свежем художнике — «кто автор», чтобы закрепить связь картина→имя
+    if (!exam && s && s.n < 1) return 'who';
     // при низкой общей точности сложные форматы реже
     const easy = !exam && pace().mode === 'easy';
+    // против однообразия: тип, который только что был, — реже (два «кто автор» подряд допустимы)
+    const last = recentTypes.slice(-2);
     return weighted(av, av.map(t => {
-      const w = exam ? TYPES[t].we : TYPES[t].w;
-      return (easy && t !== 'who' && t !== 'movement' ? w * 0.4 : w) || 0.0001;
+      let w = exam ? TYPES[t].we : TYPES[t].w;
+      if (easy && t !== 'who' && t !== 'movement') w *= 0.4;
+      if (last[1] === t) w *= t === 'who' && last[0] !== t ? 0.5 : 0.2;
+      return w || 0.0001;
     }));
   }
   const nOpts = type => skill(type).d < 0.2 ? 3 : 4;
@@ -253,9 +269,11 @@
     }
     if (type === 'era') {
       const p = pickPainting(q, { unseenOnly: uo, needYear: true }); if (!p) return build(q, 'who', opt);
-      const span = p.y < 1800 ? 50 : 25;
+      // столетия; варианты не уходят раньше 1300 и позже 1900-х
+      const span = 100;
       const bin = Math.floor(p.y / span) * span;
-      const shift = rnd(4);
+      const lo = Math.max(0, (bin - 1600) / span), hi = Math.min(3, (bin - 1300) / span);
+      const shift = lo <= hi ? lo + rnd(hi - lo + 1) : rnd(4);
       const opts = [0, 1, 2, 3].map(i => bin + (i - shift) * span);
       return { type, q, prompt: 'Когда написана?', paintings: [p], options: opts.map(b => ({ v: b, label: `${b}–${b + span - 1}` })), correct: bin };
     }
@@ -309,7 +327,7 @@
   // интервалах внутри занятия (1, 3, 6, 10, 15-й вопрос), (3) просроченные по SR,
   // (4) остальные — чаще слабые. Один художник не идёт два раза подряд.
   function newSession(newIds) {
-    return { newIds, i: 0, len: S.settings.sessionLen + newIds.length * 3, retry: [], recentT: [], ok: 0, done: 0, dueSeen: {} };
+    return { newIds, i: 0, len: S.settings.sessionLen + newIds.length * 3, retry: [], recentT: [], recentTy: [], ok: 0, done: 0, dueSeen: {} };
   }
   function nextTarget(ses) {
     const k = known();
@@ -328,8 +346,8 @@
   function nextQuestion(ses) {
     for (let tries = 0; tries < 5; tries++) {
       const q = nextTarget(ses);
-      const Q = build(q, chooseType(q, false));
-      if (Q) { ses.recentT.push(q); return Q; }
+      const Q = build(q, chooseType(q, false, ses.recentTy));
+      if (Q) { ses.recentT.push(q); ses.recentTy.push(Q.type); return Q; }
     }
     return null;
   }
@@ -403,7 +421,7 @@
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },
     importState(o, { silent = false } = {}) {
-      S = Object.assign(fresh(), o);
+      S = migrate(Object.assign(fresh(), o));
       if (silent) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } } else save();
     },
     markBroken(id) { S.broken[id] = 1; save(); }, DAY
