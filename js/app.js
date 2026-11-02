@@ -39,10 +39,11 @@
     const k = E.known();
     let plan;
     const pc = E.pace();
-    if (!k.length) plan = 'Знакомство с первыми художниками из очень разных эпох, затем практика. Первые 10 художников откроются быстро.';
-    else if (r.ok && r.warmup) plan = `Разгон: ${k.length} из ${E.WARMUP}. Сейчас ${r.count} новых художника + практика.`;
-    else if (r.ok) plan = `${r.count > 1 ? r.count + ' новых художника' : 'Новый художник'} + повторение${s.due ? ` (ждут: ${s.due})` : ''}.${pc.mode === 'fast' ? ' <span class="muted">Высокая точность — ускоряемся.</span>' : ''}`;
-    else plan = `Повторение${s.due ? ` — ждут: ${s.due}` : ' и практика'}. <span class="muted">${r.why}.</span>`;
+    const active = k.filter(q => E.st(q).w > 0.3).length;
+    if (!k.length) plan = 'Знакомство с первыми художниками из очень разных эпох, затем практика. Новые будут появляться по ходу занятия.';
+    else if (r.ok) plan = `Практика${s.due ? ` и повторение (ждут: ${s.due})` : ''}. Новые художники появятся по ходу занятия${r.warmup ? ` — разгон: ${k.length} из ${E.WARMUP}` : ''}.${pc.mode === 'fast' ? ' <span class="muted">Высокая точность — в работе больше художников.</span>' : ''}`;
+    else plan = `Практика${s.due ? ` и повторение (ждут: ${s.due})` : ''}. <span class="muted">${r.why}.</span>`;
+    if (k.length) plan += `<br><span class="muted small">В работе: ${active} худ. · нагрузка ${r.load.toFixed(1)} из ${r.cap.toFixed(1)}</span>`;
     const examCard = ex.need ? `<div class="card exam">
         <h3>Экзамен</h3>
         <p>Вы открыли ${E.S.gate.sinceExam} новых художников с прошлого экзамена. Экзамен — только невиденные картины, без подсказок, нужно 80%.
@@ -66,18 +67,13 @@
   // ---------- занятие ----------
   let ses = null, Q = null, nextQ = null;
   function session() {
-    const r = E.introReason();
-    const newIds = [];
-    if (r.ok) for (let i = 0; i < r.count; i++) { const q = E.nextNew(newIds); if (q) newIds.push(q); }
-    ses = E.newSession(newIds);
-    ses.introQueue = [...newIds];
-    nextIntro();
+    ses = E.newSession(); nextQ = null;
+    quizStep();
   }
-  function nextIntro() {
-    const q = ses.introQueue.shift();
-    if (!q) return quizStep();
+  // новый художник вводится прямо по ходу занятия, когда пул освободился
+  function startIntro(q) {
     const movFirst = !E.S.movSeen[A[q].m];
-    E.introduce(q);
+    E.introduce(q, ses); nextQ = null;
     if (movFirst) movementCard(A[q].m, () => intro(q)); else intro(q);
   }
   function movementCard(m, next) {
@@ -107,7 +103,7 @@
         </div>
         <div class="dots">${gal.map((_, j) => `<span class="${j === i ? 'on' : ''}" onclick="App._go(${j - i})"></span>`).join('')}</div>
         <div class="card"><h4>Что замечать</h4><ul>${a.s.map(x => `<li>${x}</li>`).join('')}</ul>
-        ${i === gal.length - 1 ? `<button class="primary" onclick="App._done()">${ses.introQueue.length ? 'Следующий художник' : 'К практике'}</button>` : `<button onclick="App._go(1)">Следующая картина</button>`}</div>
+        ${i === gal.length - 1 ? `<button class="primary" onclick="App._done()">К практике</button>` : `<button onclick="App._go(1)">Следующая картина</button>`}</div>
       </div>`, e => {
         if (e.key === 'ArrowRight') App._go(1);
         else if (e.key === 'ArrowLeft') App._go(-1);
@@ -116,12 +112,14 @@
       if (gal[i + 1]) { const n = new Image(); n.src = url(gal[i + 1], 960); }
     };
     App._go = d => { const j = i + d; if (j >= 0 && j < gal.length) { i = j; draw(); } };
-    App._done = nextIntro;
+    App._done = quizStep;
     draw();
   }
 
   function quizStep() {
     if (ses.i >= ses.len) return sessionEnd();
+    const nq = !nextQ && E.pendingNew(ses);
+    if (nq) return startIntro(nq);
     Q = nextQ || E.nextQuestion(ses); nextQ = null;
     if (!Q) return sessionEnd();
     Q.paintings.forEach(E.markSeen); E.save();
@@ -180,13 +178,14 @@
       <button class="primary" onclick="App._cont()">Дальше</button></div>`;
     App._cont = quizStep;
     onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); quizStep(); } };
-    if (ses.i < ses.len) { nextQ = E.nextQuestion(ses); preload(nextQ); }
+    // заранее готовим следующий вопрос, если дальше не знакомство с новым художником
+    if (ses.i < ses.len && !E.pendingNew(ses)) { nextQ = E.nextQuestion(ses); preload(nextQ); }
     document.getElementById('fb').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function sessionEnd() {
     E.endSession();
-    const learned = ses.newIds.map(q => A[q].n);
+    const learned = ses.newIds.map(n => A[n.q].n);
     render(`${nav()}<div class="card center">
       <h2>Занятие окончено</h2>
       <div class="big">${ses.done ? pct(ses.ok / ses.done) : '—'}</div><p class="muted">${ses.ok} из ${ses.done} верно</p>

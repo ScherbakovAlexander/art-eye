@@ -29,7 +29,7 @@
       v: 1, artists: {}, seen: {}, conf: {}, log: [], exams: [], movSeen: {}, broken: {},
       day: { d: today(), intro: 0, answers: 0, correct: 0 },
       gate: { sinceExam: 0, failedAt: 0, sessionsSinceFail: 0 },
-      settings: { newPerDay: 6, sessionLen: 15 },
+      settings: { newPerDay: 12, sessionLen: 15 },
       skill: {},          // по типу вопроса: { n, ok, recent[], d } — d ∈ [0,1] сложность этого типа
       updatedAt: 0, owner: null
     };
@@ -40,7 +40,13 @@
     return fresh();
   }
   // старый дневной лимит 3 тормозил после разгона — поднимаем один раз
-  function migrate(s) { if (!s.bal2) { s.settings.newPerDay = Math.max(6, s.settings.newPerDay); s.day.intro = 0; s.bal2 = 1; } return s; }
+  function migrate(s) {
+    if (!s.bal2) { s.settings.newPerDay = Math.max(6, s.settings.newPerDay); s.day.intro = 0; s.bal2 = 1; }
+    if (!s.bal3) { s.settings.newPerDay = Math.max(12, s.settings.newPerDay); s.bal3 = 1; }
+    // вес «в работе» для художников из старых версий — по накопленной стабильности
+    for (const q in s.artists) { const a = s.artists[q]; if (a.w == null) a.w = a.stab < 1 ? 0.6 : a.stab < 7 ? 0.3 : 0.1; }
+    return s;
+  }
   let onSave = null;
   function save() {
     S.updatedAt = now();
@@ -55,11 +61,12 @@
   // ---------- интервальные повторения (на уровне художника) ----------
   // stab — «стабильность» в днях: через сколько пора повторить. Верный ответ растит её тем сильнее,
   // чем дольше прошло с прошлого раза (повтор раньше срока почти ничего не даёт), ошибка — резко режет.
-  function introduce(q) {
+  function introduce(q, ses = null) {
     rollDay();
     // художники разгона не тратят дневной лимит
     if (known().length >= WARMUP) S.day.intro++;
-    S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [] };
+    S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [], w: 1 };
+    if (ses) { ses.newIds.push({ q, at: ses.i }); ses.lastIntro = ses.i; ses.len = Math.min(ses.len + 3, S.settings.sessionLen + 10); }
     S.movSeen[A[q].m] = S.movSeen[A[q].m] || now();
     S.gate.sinceExam++;
     save();
@@ -111,18 +118,53 @@
     return { mode: 'normal', acc };
   }
 
-  // ---------- ввод новых художников ----------
-  // Сначала «якоря» (ярус 1) из разных направлений — максимальный контраст.
-  // Внутри яруса предпочитаем направление, где знакомых художников меньше всего.
-  // Близкие соседи (ярус 3: Сислей рядом с Моне) идут, когда якоря уже усвоены.
+  // ---------- вес «в работе» и ёмкость пула ----------
+  // У каждого художника вес w: новый — 1. Верный ответ умножает его на (1 − 0.4·k), ошибка добавляет 0.25·k
+  // (k — насколько тип вопроса говорит о художнике). Пять верных ответов — и художник
+  // почти «уходит» (w ≈ 0.1), дальше его держит только интервальное повторение.
+  // Равновесие веса при точности p по художнику: w ≈ 0.6·(1−p)/p — легко узнаваемые уходят, трудные остаются в работе.
+  // Нагрузка пула = сумма весов (художник, которому пора на повторение, весит минимум 0.1).
+  // Когда нагрузка меньше ёмкости — вводится новый художник, прямо по ходу занятия.
+  const TYPE_K = { who: 1, find: 0.8, odd: 0.8, trait: 0.6, pair: 0.6, movement: 0.4, findMov: 0.3, title: 0.3, era: 0 };
+  function trainWeight(q, ok, k) {
+    const s = st(q); if (!s || !k) return;
+    s.w = ok ? s.w * (1 - 0.4 * k) : Math.min(1.2, s.w + 0.25 * k);
+  }
+  const isDue = q => st(q).due <= now();
+  const poolLoad = () => known().reduce((sum, q) => sum + Math.max(st(q).w, isDue(q) ? 0.1 : 0), 0);
+  // ёмкость зависит от точности: отвечаете хорошо — в работе больше художников, плохо — меньше
+  function capacity() {
+    const acc = recentAccuracy();
+    let c = known().length < WARMUP ? 3.2 : 2.6;
+    if (acc != null) c += acc >= 0.85 ? 0.8 : acc >= 0.75 ? 0.3 : acc < 0.5 ? -1.4 : acc < 0.65 ? -0.9 : 0;
+    return Math.max(1.2, c);
+  }
+
+  // ---------- выбор нового художника ----------
+  // Близость кандидата к уже знакомым: то же направление — 1, иначе убывает с расстоянием между
+  // направлениями во времени (соседние ≈ 0.5, через два века ≈ 0). Целевая близость случайна:
+  // в начале чаще далёкие, со временем диапазон сдвигается к близким, но далёкие тоже остаются.
+  // Иногда (10% в начале → 35% к концу) берём художника того же направления, что уже есть в пуле.
+  const movMid = m => midYear(MOVEMENTS[m].y);
+  function closeness(c, pool) {
+    let best = 0;
+    for (const q of pool) {
+      const v = A[c].m === A[q].m ? 1 : 0.7 * Math.exp(-Math.abs(movMid(A[c].m) - movMid(A[q].m)) / 60);
+      if (v > best) best = v;
+    }
+    return best;
+  }
   function nextNew(exclude = []) {
-    const k = known();
+    const k = known().concat(exclude);
     const cand = ORDER.filter(q => !S.artists[q] && !exclude.includes(q));
     if (!cand.length) return null;
     const minTier = Math.min(...cand.map(q => A[q].t));
-    const movCount = m => k.filter(q => A[q].m === m).length + exclude.filter(q => A[q].m === m).length;
-    return cand.filter(q => A[q].t === minTier)
-      .map((q, i) => ({ q, score: movCount(A[q].m) * 10 + i * 0.01 }))
+    const p = Math.min(1, k.length / 45);
+    const same = k.length >= 4 && Math.random() < 0.1 + 0.25 * p;
+    const T = same ? 1 : Math.random() * (0.2 + 0.6 * p);
+    const movCount = m => k.filter(q => A[q].m === m).length;
+    return cand.filter(q => A[q].t <= minTier + 1)
+      .map(q => ({ q, score: Math.abs(closeness(q, k) - T) + 0.3 * (A[q].t - minTier) + 0.04 * movCount(A[q].m) + 0.08 * Math.random() }))
       .sort((a, b) => a.score - b.score)[0].q;
   }
   const WARMUP = 10;
@@ -135,28 +177,23 @@
     const canTake = need && (!S.gate.failedAt || S.gate.sessionsSinceFail >= 1);
     return { need, block, canTake, left: Math.max(0, 14 - n) };
   }
-  // «закреплён» — уже несколько раз узнан и последние ответы в основном верные (время не нужно ждать)
-  function settled(q) {
-    const s = st(q);
-    return s.stab >= 1 || (s.ok >= 3 && avg(s.recent.slice(-5)) >= 0.6);
-  }
+  // можно ли сейчас ввести нового художника (без учёта места в занятии)
   function introReason() {
     rollDay();
-    const k = known(), p = pace();
-    if (!k.length) return { ok: true, count: 4 };
-    if (!ORDER.some(q => !S.artists[q])) return { ok: false, why: 'Все художники открыты' };
-    if (p.mode === 'easy') return { ok: false, why: `Точность ${Math.round(p.acc * 100)}% — упрощаем: сначала закрепим знакомых` };
-    // разгон: быстро набираем первые 10 художников, без дневного лимита
-    if (k.length < WARMUP) return { ok: true, count: Math.min(p.mode === 'fast' ? 4 : 3, WARMUP - k.length), warmup: true };
-    if (examStatus().block) return { ok: false, why: 'Сдайте экзамен, чтобы открыть новых художников' };
-    // сколько новых за занятие — по точности: 85%+ → 3, 75%+ → 2, иначе 1
-    const byAcc = p.acc == null ? 2 : p.acc >= 0.85 ? 3 : p.acc >= 0.75 ? 2 : 1;
-    const dayLeft = S.settings.newPerDay + (p.mode === 'fast' ? 3 : 0) - S.day.intro;
-    if (dayLeft <= 0) return { ok: false, why: 'Лимит новых художников на сегодня' };
-    const shakyLeft = (p.mode === 'fast' ? 6 : 4) - k.filter(q => !settled(q)).length;
-    if (shakyLeft <= 0) return { ok: false, why: 'Сначала закрепите недавних художников' };
-    if (dueList().length > 20) return { ok: false, why: 'Много художников ждут повторения' };
-    return { ok: true, count: Math.min(byAcc, dayLeft, shakyLeft) };
+    const k = known(), info = { load: poolLoad(), cap: capacity() };
+    if (!ORDER.some(q => !S.artists[q])) return { ok: false, why: 'Все художники открыты', ...info };
+    if (k.length >= WARMUP && examStatus().block) return { ok: false, why: 'Сдайте экзамен, чтобы открыть новых художников', ...info };
+    if (k.length >= WARMUP && S.day.intro >= S.settings.newPerDay) return { ok: false, why: 'Лимит новых художников на сегодня', ...info };
+    if (info.load >= info.cap) return { ok: false, why: 'Новый художник появится, когда текущие закрепятся', full: true, ...info };
+    return { ok: true, warmup: k.length < WARMUP, ...info };
+  }
+  // новый художник для этого места занятия: пул не заполнен, в занятии хватает вопросов,
+  // чтобы его закрепить, и с прошлого знакомства прошло хотя бы 3 вопроса
+  function pendingNew(ses) {
+    if (!introReason().ok) return null;
+    if (ses.i > 0 && (ses.len - ses.i < 6 || ses.i - ses.lastIntro < 3)) return null;
+    if (ses.newIds.length >= (known().length < WARMUP ? 6 : 4)) return null;
+    return nextNew();
   }
 
   // ---------- выбор картин ----------
@@ -305,8 +342,9 @@
   function answer(Q, v, { exam = false } = {}) {
     rollDay();
     const ok = v === Q.correct;
-    const w = exam ? 1 : ({ who: 1, find: 0.8, odd: 0.8, trait: 0.6, pair: 0.6, movement: 0.4, findMov: 0.3, title: 0.3, era: 0 })[Q.type];
+    const w = exam ? 1 : TYPE_K[Q.type];
     if (w > 0) grade(Q.q, ok, w);
+    trainWeight(Q.q, ok, exam ? 0.7 : w);
     if (!exam) trainSkill(Q.type, ok);
     if (!ok) {
       let other = null;
@@ -326,22 +364,20 @@
   // Очередь цели: (1) повтор ошибок через 3 вопроса, (2) новые художники на расширяющихся
   // интервалах внутри занятия (1, 3, 6, 10, 15-й вопрос), (3) просроченные по SR,
   // (4) остальные — чаще слабые. Один художник не идёт два раза подряд.
-  function newSession(newIds) {
-    return { newIds, i: 0, len: S.settings.sessionLen + newIds.length * 3, retry: [], recentT: [], recentTy: [], ok: 0, done: 0, dueSeen: {} };
+  function newSession() {
+    return { newIds: [], i: 0, len: S.settings.sessionLen, lastIntro: -99, retry: [], recentT: [], recentTy: [], ok: 0, done: 0 };
   }
   function nextTarget(ses) {
     const k = known();
     const notRecent = q => !ses.recentT.slice(-2).includes(q) || k.length < 3;
     const r = ses.retry.findIndex(x => x.at <= ses.i && notRecent(x.q));
     if (r >= 0) return ses.retry.splice(r, 1)[0].q;
-    const sched = [0, 2, 5, 9, 14];
-    for (let j = 0; j < ses.newIds.length; j++) {
-      if (sched.map(x => x + j).includes(ses.i) && notRecent(ses.newIds[j])) return ses.newIds[j];
-    }
-    const due = dueList().filter(q => !ses.dueSeen[q] && notRecent(q));
-    if (due.length) { ses.dueSeen[due[0]] = 1; return due[0]; }
+    // новый художник — на 1, 3, 6, 10-м вопросе после знакомства
+    for (const n of ses.newIds) if ([0, 2, 5, 9].includes(ses.i - n.at) && notRecent(n.q)) return n.q;
+    // остальные — пропорционально весу «в работе»; кому пора на повторение — с надбавкой,
+    // «ушедшие» художники всё равно изредка попадаются
     const cand = k.filter(notRecent);
-    return weighted(cand, cand.map(q => { const s = st(q); const err = s.recent.length ? 1 - avg(s.recent) : 0.5; return (1 + 3 * err) / (0.5 + Math.sqrt(s.stab)); }));
+    return weighted(cand, cand.map(q => st(q).w + 0.04 + (isDue(q) ? 0.35 : 0)));
   }
   function nextQuestion(ses) {
     for (let tries = 0; tries < 5; tries++) {
@@ -416,7 +452,7 @@
 
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
-    examStatus, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
+    examStatus, pendingNew, poolLoad, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
     stats, shuffle, TYPES, skill, pace, WARMUP,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },
