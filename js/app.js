@@ -30,8 +30,32 @@
   const title = p => p.t ? `«${esc(p.t)}»` : '<i>Без названия</i>';
   const caption = (p, full = true) => `<div class="cap">${title(p)}${p.y ? ', ' + p.y : ''}${full ? `<br><b>${A[p.a].n}</b> · ${M[A[p.a].m].n}` : ''}</div>`;
   const pct = x => Math.round(x * 100) + '%';
-  function render(html, key = null) { $app.innerHTML = html; onKey = key; window.scrollTo(0, 0); }
-  const nav = () => `<nav><a onclick="App.home()">Главная</a><a onclick="App.progress()">Прогресс</a><a onclick="App.gallery()">Галерея</a><a onclick="App.settings()">Настройки</a>${window.Sync && Sync.enabled ? `<a class="acct" onclick="App.account()">${Sync.user ? esc(Sync.user.email || 'Аккаунт') : 'Войти'}</a>` : ''}</nav>`;
+  // fit — экран занятия: ровно в высоту телефона, без прокрутки
+  function render(html, key = null, fit = false) {
+    closeMenu(); document.body.classList.toggle('fit', fit);
+    $app.innerHTML = html; onKey = key; window.scrollTo(0, 0);
+  }
+  const acctLabel = () => window.Sync && Sync.user ? esc(Sync.user.email || 'Аккаунт') : 'Войти / регистрация';
+  const gear = () => `<button class="iconbtn" onclick="App.menu()" aria-label="Меню">⚙</button>`;
+  // на телефоне остаются название, вход и шестерёнка, остальное — в меню
+  const nav = () => `<nav><a class="brand" onclick="App.home()">Насмотренность</a>
+    <span class="links"><a onclick="App.progress()">Прогресс</a><a onclick="App.gallery()">Галерея</a><a onclick="App.settings()">Настройки</a></span>
+    <span class="sp"></span><a class="acct" onclick="App.account()">${window.Sync && Sync.user ? acctLabel() : 'Войти'}</a>${gear()}</nav>`;
+  // верхняя строка экранов занятия: выход, прогресс, меню
+  const topRow = (progress = null) => `<div class="top"><button class="iconbtn" onclick="App.home()" aria-label="Выйти">✕</button>
+    ${progress == null ? '<span class="sp"></span>' : `<div class="bar"><div style="width:${pct(progress)}"></div></div>`}${gear()}</div>`;
+  // меню-шестерёнка: доступно с любого экрана
+  function menu() {
+    if (closeMenu()) return;
+    const el = document.createElement('div'); el.className = 'menu'; el.id = 'menu';
+    el.innerHTML = `<div class="sheet">
+      <button class="acct" onclick="App.account()">👤 ${acctLabel()}</button>
+      <button onclick="App.home()">Главная</button><button onclick="App.progress()">Прогресс</button>
+      <button onclick="App.gallery()">Галерея</button><button onclick="App.settings()">Настройки</button></div>`;
+    el.onclick = e => { if (e.target === el) closeMenu(); };
+    document.body.appendChild(el);
+  }
+  function closeMenu() { const m = document.getElementById('menu'); if (m) m.remove(); return !!m; }
 
   // ---------- главная ----------
   function home() {
@@ -51,17 +75,17 @@
         ${ex.canTake ? `<button class="${ex.block ? 'primary' : ''}" onclick="App.exam()">Сдать экзамен</button>` : `<p class="muted">Пересдача откроется после одного занятия.</p>`}
       </div>` : '';
     render(`${nav()}
-      <header class="hero"><h1>Насмотренность</h1><p class="muted">Учимся узнавать художников и стили — по картинам, которые видим впервые.</p></header>
+      <p class="muted hero">Учимся узнавать художников и стили — по картинам, которые видим впервые.</p>
       <div class="statrow">
         <div><b>${s.known}</b><span>из ${s.all} художников</span></div>
         <div><b>${s.seenCount}</b><span>картин увидено</span></div>
         <div><b>${s.acc7 == null ? '—' : pct(s.acc7)}</b><span>точность за 7 дней</span></div>
       </div>
-      ${examCard}
       <div class="card">
         <h3>Занятие</h3><p>${plan}</p>
         <button class="primary" onclick="App.session()">Начать</button>
-      </div>`, e => { if (e.key === 'Enter') App.session(); });
+      </div>
+      ${examCard}`, e => { if (e.key === 'Enter') App.session(); });
   }
 
   // ---------- занятие ----------
@@ -79,36 +103,48 @@
   function movementCard(m, next) {
     const mv = M[m];
     App._next = next;
-    render(`<div class="card intro">
-        <div class="kicker">Новое направление</div>
-        <h2>${mv.n}</h2><div class="muted">${mv.y}</div>
-        <p>${mv.d}</p>
-        <h4>На что смотреть</h4><ul>${mv.s.map(x => `<li>${x}</li>`).join('')}</ul>
-        <button class="primary" onclick="App._next()">Дальше</button></div>`, e => { if (e.key === 'Enter') next(); });
+    render(`<div class="stage">${topRow()}
+        <div class="scroll">
+          <div class="kicker">Новое направление</div>
+          <h2>${mv.n}</h2><div class="muted">${mv.y}</div>
+          <p>${mv.d}</p>
+          <h4>На что смотреть</h4><ul>${mv.s.map(x => `<li>${x}</li>`).join('')}</ul>
+        </div>
+        <button class="primary wide" onclick="App._next()">Дальше</button></div>`, e => { if (e.key === 'Enter') next(); }, true);
+  }
+  // свайп влево/вправо по картине, тап по левой/правой части — листание
+  function swipe(el, go) {
+    let x0 = null, y0 = 0;
+    el.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    el.addEventListener('touchend', e => {
+      if (x0 == null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); go(dx < 0 ? 1 : -1); }
+    });
+    el.addEventListener('click', e => { const r = el.getBoundingClientRect(); go(e.clientX - r.left < r.width * 0.35 ? -1 : 1); });
   }
   function intro(q) {
     const a = A[q], gal = E.introGallery(q, E.known().length <= E.WARMUP ? 6 : 8);
     let i = 0;
     const draw = () => {
       const p = gal[i]; E.markSeen(p); E.save();
-      render(`<div class="intro-wrap">
-        <div class="intro-head">
-          <div class="kicker">Новый художник · ${M[a.m].n}</div>
-          <h2>${a.n}</h2><div class="muted">${a.y} · ${a.c}</div>
-        </div>
-        <div class="viewer">
-          <button class="arrow" onclick="App._go(-1)" ${i ? '' : 'disabled'}>‹</button>
-          <figure>${img(p)}${caption(p, false)}</figure>
-          <button class="arrow" onclick="App._go(1)" ${i < gal.length - 1 ? '' : 'disabled'}>›</button>
-        </div>
+      const last = i === gal.length - 1;
+      render(`<div class="stage intro">${topRow()}
+        <div class="head"><div class="kicker">Новый художник</div>
+          <h2>${a.n}</h2><div class="muted small">${a.y} · ${a.c} · ${M[a.m].n}</div></div>
+        <figure class="frame swipe" id="viewer">${img(p)}
+          ${i ? '<span class="edge l">‹</span>' : ''}${last ? '' : '<span class="edge r">›</span>'}</figure>
+        ${caption(p, false)}
         <div class="dots">${gal.map((_, j) => `<span class="${j === i ? 'on' : ''}" onclick="App._go(${j - i})"></span>`).join('')}</div>
-        <div class="card"><h4>Что замечать</h4><ul>${a.s.map(x => `<li>${x}</li>`).join('')}</ul>
-        ${i === gal.length - 1 ? `<button class="primary" onclick="App._done()">К практике</button>` : `<button onclick="App._go(1)">Следующая картина</button>`}</div>
+        <div class="traits"><h4>Что замечать</h4>${a.s.map(x => `<span>${x}</span>`).join('')}</div>
+        <div class="navrow"><button onclick="App._go(-1)" ${i ? '' : 'disabled'} aria-label="Назад">‹</button>
+          ${last ? `<button class="primary" onclick="App._done()">К практике</button>` : `<button onclick="App._go(1)">Следующая картина ›</button>`}</div>
       </div>`, e => {
         if (e.key === 'ArrowRight') App._go(1);
         else if (e.key === 'ArrowLeft') App._go(-1);
-        else if (e.key === 'Enter') i === gal.length - 1 ? App._done() : App._go(1);
-      });
+        else if (e.key === 'Enter') last ? App._done() : App._go(1);
+      }, true);
+      swipe(document.getElementById('viewer'), App._go);
       if (gal[i + 1]) { const n = new Image(); n.src = url(gal[i + 1], 960); }
     };
     App._go = d => { const j = i + d; if (j >= 0 && j < gal.length) { i = j; draw(); } };
@@ -139,14 +175,12 @@
     const opts = Q.grid ? '' : `<div class="opts ${Q.options.length === 2 ? 'two' : ''} ${Q.longOpts ? 'long' : ''}">${Q.options.map((o, j) => `<button data-v="${o.v}" onclick="App._pick('${o.v}')"><span class="num">${j + 1}</span>${o.label}</button>`).join('')}</div>`;
     App._pick = v => { if (App._locked) return; App._locked = true; onPick(isNaN(v) || Q.type !== 'era' ? v : +v); };
     App._locked = false;
-    render(`<div class="quiz ${exam ? 'is-exam' : ''}">
-        <div class="stage">
-          <div class="bar"><div style="width:${pct(progress)}"></div></div>
+    render(`<div class="stage quiz ${exam ? 'is-exam' : ''}">${topRow(progress)}
           <div class="prompt">${exam ? '<span class="tag">экзамен</span>' : ''}${Q.prompt}</div>
-          ${pics}${opts}
-        </div><div id="fb"></div></div>`, e => {
+          <div class="pics" id="pics">${pics}</div><div class="bottom" id="fb">${opts}</div>
+        </div>`, e => {
       const n = +e.key; if (n >= 1 && n <= Q.options.length) App._pick(String(Q.options[n - 1].v));
-    });
+    }, true);
   }
 
   function feedback(Q, v, ok) {
@@ -158,29 +192,34 @@
     });
     // подписи под картинками — каждая показанная картина тоже часть обучения
     if (Q.grid) document.querySelectorAll('.pic').forEach(b => { const o = A[E.paintingById(b.dataset.v).a]; b.insertAdjacentHTML('beforeend', `<div class="who">${o.n}${Q.type === 'findMov' ? `<br><span class="muted">${M[o.m].n}</span>` : ''}</div>`); });
-    const capHtml = Q.grid ? '' : Q.paintings.map(p => caption(p)).join('');
-    let extra = '';
+    // разбор встаёт на место вариантов ответа — всё остаётся на одном экране
     const t = A[Q.q];
+    const opt = Q.options.find(o => String(o.v) === correct);
+    const right = Q.type === 'trait' ? t.n : opt && opt.label;
+    const head = ok ? '✓ Верно' : `✗ Неверно${right ? ` — правильно: <b>${right}</b>` : ''}`;
+    let capHtml = Q.grid ? '' : Q.paintings.map(p => caption(p)).join('');
+    let hint = '';
     if (!ok) {
       const other = Q.type === 'who' || Q.type === 'trait' ? A[v] : Q.type === 'find' ? A[E.paintingById(v).a] : null;
-      if (other) {
+      if (other && !Q.grid) {
+        // рядом с картиной — работа художника, которого вы выбрали
         const inQ = Q.paintings.map(p => p.id);
         const pool = other.p.filter(p => !E.S.broken[p.id] && !inQ.includes(p.id));
         const sample = pool.find(p => p.fam && E.S.seen[p.id]) || pool.find(p => p.fam) || pool[0];
-        extra = `<div class="compare">
-          <div><div class="kicker">Вы выбрали: ${other.n}</div><figure>${img(sample, 500)}${caption(sample, false)}</figure>
-            <ul class="small">${other.s.slice(0, 3).map(x => `<li>${x}</li>`).join('')}</ul></div>
-          <div><div class="kicker">Правильно: ${t.n}</div><ul class="small">${t.s.map(x => `<li>${x}</li>`).join('')}</ul></div></div>`;
-      } else extra = `<div class="hint"><b>${t.n}</b>: ${t.s.slice(0, 3).join('; ')}</div>`;
+        const p = Q.paintings[0];
+        document.getElementById('pics').innerHTML = `<div class="pair">
+          <figure class="frame">${img(p, 500)}<span class="lbl ok">${t.n}</span></figure>
+          <figure class="frame">${img(sample, 500)}<span class="lbl bad">${other.n}</span></figure></div>`;
+        hint = `<div class="hint"><b>${t.n}</b>: ${t.s.slice(0, 2).join('; ')}<br><b>${other.n}</b>: ${other.s.slice(0, 2).join('; ')}</div>`;
+      } else hint = `<div class="hint"><b>${t.n}</b>: ${t.s.slice(0, 2).join('; ')}</div>`;
     }
     document.getElementById('fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}">
-      <div class="verdict">${ok ? 'Верно' : 'Неверно'}</div>${capHtml}${extra}
-      <button class="primary" onclick="App._cont()">Дальше</button></div>`;
+      <div class="fbody"><div class="verdict">${head}</div>${capHtml}${hint}</div>
+      <button class="primary wide" onclick="App._cont()">Дальше</button></div>`;
     App._cont = quizStep;
     onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); quizStep(); } };
     // заранее готовим следующий вопрос, если дальше не знакомство с новым художником
     if (ses.i < ses.len && !E.pendingNew(ses)) { nextQ = E.nextQuestion(ses); preload(nextQ); }
-    document.getElementById('fb').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function sessionEnd() {
@@ -304,7 +343,11 @@
   }
   // ---------- аккаунт ----------
   function account(msg = '') {
-    if (!window.Sync || !Sync.enabled) return home();
+    if (!window.Sync || !Sync.enabled) return render(`${nav()}<div class="card auth"><h2>Вход и регистрация</h2>
+      <p>Вход по email и через Google скоро заработает — сервер аккаунтов ещё подключается.</p>
+      <p class="muted">Сейчас прогресс хранится в этом браузере. Чтобы не потерять его или перенести на другое устройство, сохраните файл и загрузите его там.</p>
+      <button onclick="App._export()">Скачать прогресс</button>
+      <label class="btn">Загрузить из файла<input type="file" accept=".json" hidden onchange="App._import(this.files[0])"></label></div>`);
     if (Sync.user) return render(`${nav()}<div class="card"><h2>Аккаунт</h2>
       <p>Вы вошли как <b>${esc(Sync.user.email || Sync.user.displayName || '')}</b>. Прогресс сохраняется в аккаунте и доступен на любом устройстве.</p>
       <p class="muted small">${Sync.status}</p>
@@ -322,7 +365,7 @@
   }
 
   window.App = {
-    home, session, exam, progress, gallery, lightbox, settings, imgErr, account,
+    home, session, exam, progress, gallery, lightbox, settings, imgErr, account, menu,
     _auth(f, mode) {
       Sync.emailAuth(mode === 'up', f.email.value, f.pass.value).then(() => home()).catch(e => account(Sync.errText(e)));
     },
