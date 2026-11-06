@@ -195,12 +195,12 @@
     // разбор встаёт на место вариантов ответа — всё остаётся на одном экране
     const t = A[Q.q];
     const opt = Q.options.find(o => String(o.v) === correct);
-    const right = Q.type === 'trait' ? t.n : opt && opt.label;
+    const right = opt && opt.label;
     const head = ok ? '✓ Верно' : `✗ Неверно${right ? ` — правильно: <b>${right}</b>` : ''}`;
     let capHtml = Q.grid ? '' : Q.paintings.map(p => caption(p)).join('');
     let hint = '';
     if (!ok) {
-      const other = Q.type === 'who' || Q.type === 'trait' ? A[v] : Q.type === 'find' ? A[E.paintingById(v).a] : null;
+      const other = Q.type === 'who' ? A[v] : Q.type === 'find' ? A[E.paintingById(v).a] : null;
       if (other && !Q.grid) {
         // рядом с картиной — работа художника, которого вы выбрали
         const inQ = Q.paintings.map(p => p.id);
@@ -257,7 +257,6 @@
     const answerText = a => {
       const Q = a.Q;
       if (Q.type === 'who') return `Это <b>${A[Q.q].n}</b>, вы ответили: ${A[a.v].n}`;
-      if (Q.type === 'trait') return `Это <b>${A[Q.q].n}</b>, вы выбрали описание стиля: ${A[a.v].n}`;
       if (Q.type === 'findMov') return `Нужно было найти: ${M[A[Q.q].m].n} (${A[Q.q].n})`;
       if (Q.type === 'movement') return `<b>${M[Q.correct].n}</b> (${A[Q.q].n}), вы ответили: ${M[a.v].n}`;
       if (Q.type === 'era') return `<b>${Q.paintings[0].y}</b> — ${A[Q.q].n}`;

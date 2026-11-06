@@ -125,7 +125,7 @@
   // Равновесие веса при точности p по художнику: w ≈ 0.6·(1−p)/p — легко узнаваемые уходят, трудные остаются в работе.
   // Нагрузка пула = сумма весов (художник, которому пора на повторение, весит минимум 0.1).
   // Когда нагрузка меньше ёмкости — вводится новый художник, прямо по ходу занятия.
-  const TYPE_K = { who: 1, find: 0.8, odd: 0.8, trait: 0.6, pair: 0.6, movement: 0.4, findMov: 0.3, title: 0.3, era: 0 };
+  const TYPE_K = { who: 1, find: 0.8, odd: 0.8, pair: 0.6, movement: 0.4, findMov: 0.3, title: 0.3, era: 0 };
   function trainWeight(q, ok, k) {
     const s = st(q); if (!s || !k) return;
     s.w = ok ? s.w * (1 - 0.4 * k) : Math.min(1.2, s.w + 0.25 * k);
@@ -236,7 +236,6 @@
   const TYPES = {
     who: { label: 'Кто автор', min: 2, w: 5, we: 6 },
     find: { label: 'Найти картину художника', min: 4, w: 2, we: 2 },
-    trait: { label: 'Стиль художника (описание)', min: 4, w: 1.2, we: 1 },
     movement: { label: 'Стиль картины (направление)', min: 4, movs: 2, w: 1.8, we: 1.5 },
     findMov: { label: 'Найти картину направления', min: 5, movs: 4, w: 1, we: 0.8 },
     odd: { label: 'Лишняя картина', min: 5, w: 1.5, we: 2 },
@@ -265,7 +264,6 @@
     }));
   }
   const nOpts = type => skill(type).d < 0.2 ? 3 : 4;
-  function traitLabel(q) { return shuffle(A[q].s).slice(0, 2).join('; '); }
   function build(q, type, opt = {}) {
     const a = A[q], uo = !!opt.exam;
     const k = known();
@@ -273,11 +271,6 @@
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
       const ds = distractors(q, Math.min(nOpts(type) - 1, k.length - 1), type);
       return { type, q, prompt: 'Кто автор?', paintings: [p], options: shuffle([q, ...ds]).map(x => ({ v: x, label: A[x].n })), correct: q };
-    }
-    if (type === 'trait') {
-      const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
-      const ds = distractors(q, nOpts(type) - 1, type);
-      return { type, q, prompt: 'Какое описание стиля подходит автору?', paintings: [p], options: shuffle([q, ...ds]).map(x => ({ v: x, label: traitLabel(x) })), correct: q, longOpts: true };
     }
     if (type === 'movement') {
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
@@ -348,7 +341,7 @@
     if (!exam) trainSkill(Q.type, ok);
     if (!ok) {
       let other = null;
-      if (Q.type === 'who' || Q.type === 'trait') other = v;
+      if (Q.type === 'who') other = v;
       else if (Q.type === 'find') other = paintingById(v).a;
       else if (Q.type === 'odd' || Q.type === 'pair') other = Q.b !== Q.q ? Q.b : null;
       if (other && other !== Q.q) S.conf[Q.q + '|' + other] = (S.conf[Q.q + '|' + other] || 0) + 1;
