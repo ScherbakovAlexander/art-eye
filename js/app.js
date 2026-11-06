@@ -17,6 +17,19 @@
     return `<img class="${cls}" src="${url(p, w)}" data-id="${p.id}" data-w="${w}" alt="" decoding="async" onerror="App.imgErr(this)">`;
   }
   // если миниатюры такого размера нет (оригинал меньше) — пробуем меньше, затем оригинал
+  // портрет художника (Wikidata); по нажатию — крупно
+  function portrait(q, cls = 'ava') {
+    const r = (window.PORTRAITS || {})[q]; if (!r) return '';
+    const p = { h: r[0], f: r[1] };
+    return `<img class="${cls}" src="${url(p, 250)}" alt="" onerror="this.remove()" onclick="App.showPortrait('${q}')">`;
+  }
+  function showPortrait(q) {
+    const r = (window.PORTRAITS || {})[q]; if (!r) return;
+    const el = document.createElement('div'); el.className = 'lightbox';
+    el.innerHTML = `<figure><img src="${url({ h: r[0], f: r[1] }, 500)}" alt="" onerror="this.src='${url({ h: r[0], f: r[1] }, 0)}'"><div class="cap"><b>${A[q].n}</b></div></figure>`;
+    el.onclick = () => el.remove();
+    document.body.appendChild(el);
+  }
   function imgErr(el) {
     const p = E.paintingById(el.dataset.id), w = +el.dataset.w;
     const next = SIZES.find(s => s < w);
@@ -130,8 +143,8 @@
       const p = gal[i]; E.markSeen(p); E.save();
       const last = i === gal.length - 1;
       render(`<div class="stage intro">${topRow()}
-        <div class="head"><div class="kicker">Новый художник</div>
-          <h2>${a.n}</h2><div class="muted small">${a.y} · ${a.c} · ${M[a.m].n}</div></div>
+        <div class="head">${portrait(q)}<div><div class="kicker">Новый художник</div>
+          <h2>${a.n}</h2><div class="muted small">${a.y} · ${a.c} · ${M[a.m].n}</div></div></div>
         <figure class="frame swipe" id="viewer">${img(p)}
           ${i ? '<span class="edge l">‹</span>' : ''}${last ? '' : '<span class="edge r">›</span>'}</figure>
         ${caption(p, false)}
@@ -167,12 +180,14 @@
   }
 
   function drawQuestion(Q, { progress, onPick, exam }) {
+    const car = Q.grid && Q.paintings.length > 2 && matchMedia('(max-width: 640px) and (orientation: portrait)').matches;
     const pics = Q.grid
-      ? `<div class="grid">${Q.paintings.map((p, j) => `<button class="pic" data-v="${p.id}" onclick="App._pick('${p.id}')"><span class="num">${j + 1}</span>${img(p, 500)}</button>`).join('')}</div>`
+      ? `<div class="grid ${Q.paintings.length === 2 ? 'two' : ''} ${car ? 'car swipe' : ''}" id="grid">${Q.paintings.map((p, j) => `<button class="pic ${j ? '' : 'cur'}" data-v="${p.id}" ${car ? '' : `onclick="App._pick('${p.id}')"`}><span class="num">${j + 1}</span>${img(p, car ? 960 : 500)}</button>`).join('')}</div>`
+        + (car ? `<div class="pager">${Q.paintings.map((p, j) => `<button class="${j ? '' : 'on'}" data-v="${p.id}" onclick="App._show(${j})">${j + 1}</button>`).join('')}</div>` : '')
       : Q.pairView
         ? `<div class="pair">${Q.paintings.map(p => `<figure class="frame">${img(p, 500)}</figure>`).join('')}</div>`
         : `<figure class="frame">${img(Q.paintings[0])}</figure>`;
-    const opts = Q.grid ? '' : `<div class="opts ${Q.options.length === 2 ? 'two' : ''} ${Q.longOpts ? 'long' : ''}">${Q.options.map((o, j) => `<button data-v="${o.v}" onclick="App._pick('${o.v}')"><span class="num">${j + 1}</span>${o.label}</button>`).join('')}</div>`;
+    const opts = car ? `<button class="primary wide choose" onclick="App._pick(App._curId())">Выбрать эту картину</button>` : Q.grid ? '' : `<div class="opts ${Q.options.length === 2 ? 'two' : ''} ${Q.longOpts ? 'long' : ''}">${Q.options.map((o, j) => `<button data-v="${o.v}" onclick="App._pick('${o.v}')"><span class="num">${j + 1}</span>${o.label}</button>`).join('')}</div>`;
     App._pick = v => { if (App._locked) return; App._locked = true; onPick(isNaN(v) || Q.type !== 'era' ? v : +v); };
     App._locked = false;
     render(`<div class="stage quiz ${exam ? 'is-exam' : ''}">${topRow(progress)}
@@ -181,6 +196,16 @@
         </div>`, e => {
       const n = +e.key; if (n >= 1 && n <= Q.options.length) App._pick(String(Q.options[n - 1].v));
     }, true);
+    if (car) {
+      let cur = 0;
+      App._show = j => {
+        cur = (j + Q.paintings.length) % Q.paintings.length;
+        document.querySelectorAll('#grid .pic').forEach((b, k) => b.classList.toggle('cur', k === cur));
+        document.querySelectorAll('.pager button').forEach((b, k) => b.classList.toggle('on', k === cur));
+      };
+      App._curId = () => Q.paintings[cur].id;
+      swipe(document.getElementById('grid'), d => App._show(cur + d));
+    }
   }
 
   function feedback(Q, v, ok) {
@@ -191,7 +216,8 @@
       else b.classList.add('dim');
     });
     // подписи под картинками — каждая показанная картина тоже часть обучения
-    if (Q.grid) document.querySelectorAll('.pic').forEach(b => { const o = A[E.paintingById(b.dataset.v).a]; b.insertAdjacentHTML('beforeend', `<div class="who">${o.n}${Q.type === 'findMov' ? `<br><span class="muted">${M[o.m].n}</span>` : ''}</div>`); });
+    if (Q.grid) document.querySelectorAll('.pic').forEach(b => { const o = A[E.paintingById(b.dataset.v).a]; b.insertAdjacentHTML('beforeend', `<div class="who">${o.n}${Q.type === 'older' ? `, <b>${E.paintingById(b.dataset.v).y}</b>` : ''}${Q.type === 'findMov' ? `<br><span class="muted">${M[o.m].n}</span>` : ''}</div>`); });
+    if (document.querySelector('.grid.car')) App._show(Q.paintings.findIndex(p => p.id === correct));
     // разбор встаёт на место вариантов ответа — всё остаётся на одном экране
     const t = A[Q.q];
     const opt = Q.options.find(o => String(o.v) === correct);
@@ -199,7 +225,10 @@
     const head = ok ? '✓ Верно' : `✗ Неверно${right ? ` — правильно: <b>${right}</b>` : ''}`;
     let capHtml = Q.grid ? '' : Q.paintings.map(p => caption(p)).join('');
     let hint = '';
-    if (!ok) {
+    if (Q.type === 'older') {
+      const [y1, y2] = Q.paintings.map(p => p.y), d = Math.abs(y1 - y2);
+      hint = `<div class="hint">Между картинами <b>${d} ${d % 10 === 1 && d % 100 !== 11 ? 'год' : [2, 3, 4].includes(d % 10) && ![12, 13, 14].includes(d % 100) ? 'года' : 'лет'}</b>.</div>`;
+    } else if (!ok) {
       const other = Q.type === 'who' ? A[v] : Q.type === 'find' ? A[E.paintingById(v).a] : null;
       if (other && !Q.grid) {
         // рядом с картиной — работа художника, которого вы выбрали
@@ -318,7 +347,7 @@
     q = q || k[k.length - 1];
     const a = A[q];
     render(`${nav()}<div class="chips">${k.map(x => `<button class="${x === q ? 'on' : ''}" onclick="App.gallery('${x}')">${A[x].n}</button>`).join('')}</div>
-      <h2>${a.n} <span class="muted small">${a.y} · ${M[a.m].n}</span></h2>
+      <div class="ghead">${portrait(q)}<h2>${a.n} <span class="muted small">${a.y} · ${M[a.m].n}</span></h2></div>
       <div class="wall">${[...a.p].sort((x, y) => (x.y || 9999) - (y.y || 9999)).map(p => `<button onclick="App.lightbox('${p.id}')">${img(p, 330)}</button>`).join('')}</div>`);
   }
   function lightbox(id) {
@@ -364,7 +393,7 @@
   }
 
   window.App = {
-    home, session, exam, progress, gallery, lightbox, settings, imgErr, account, menu,
+    home, session, exam, progress, gallery, lightbox, settings, imgErr, account, menu, showPortrait,
     _auth(f, mode) {
       Sync.emailAuth(mode === 'up', f.email.value, f.pass.value).then(() => home()).catch(e => account(Sync.errText(e)));
     },

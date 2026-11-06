@@ -29,7 +29,7 @@
       v: 1, artists: {}, seen: {}, conf: {}, log: [], exams: [], movSeen: {}, broken: {},
       day: { d: today(), intro: 0, answers: 0, correct: 0 },
       gate: { sinceExam: 0, failedAt: 0, sessionsSinceFail: 0 },
-      settings: { newPerDay: 12, sessionLen: 15 },
+      settings: { newPerDay: 12, sessionLen: 10 },
       skill: {},          // по типу вопроса: { n, ok, recent[], d } — d ∈ [0,1] сложность этого типа
       updatedAt: 0, owner: null
     };
@@ -43,6 +43,8 @@
   function migrate(s) {
     if (!s.bal2) { s.settings.newPerDay = Math.max(6, s.settings.newPerDay); s.day.intro = 0; s.bal2 = 1; }
     if (!s.bal3) { s.settings.newPerDay = Math.max(12, s.settings.newPerDay); s.bal3 = 1; }
+    // занятия короче
+    if (!s.bal4) { if (s.settings.sessionLen >= 15) s.settings.sessionLen = 10; s.bal4 = 1; }
     // вес «в работе» для художников из старых версий — по накопленной стабильности
     for (const q in s.artists) { const a = s.artists[q]; if (a.w == null) a.w = a.stab < 1 ? 0.6 : a.stab < 7 ? 0.3 : 0.1; }
     return s;
@@ -66,7 +68,7 @@
     // художники разгона не тратят дневной лимит
     if (known().length >= WARMUP) S.day.intro++;
     S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [], w: 1 };
-    if (ses) { ses.newIds.push({ q, at: ses.i }); ses.lastIntro = ses.i; ses.len = Math.min(ses.len + 3, S.settings.sessionLen + 10); }
+    if (ses) { ses.newIds.push({ q, at: ses.i }); ses.lastIntro = ses.i; ses.len = Math.min(ses.len + 2, S.settings.sessionLen + 6); }
     S.movSeen[A[q].m] = S.movSeen[A[q].m] || now();
     S.gate.sinceExam++;
     save();
@@ -125,7 +127,7 @@
   // Равновесие веса при точности p по художнику: w ≈ 0.6·(1−p)/p — легко узнаваемые уходят, трудные остаются в работе.
   // Нагрузка пула = сумма весов (художник, которому пора на повторение, весит минимум 0.1).
   // Когда нагрузка меньше ёмкости — вводится новый художник, прямо по ходу занятия.
-  const TYPE_K = { who: 1, find: 0.8, odd: 0.8, pair: 0.6, movement: 0.4, findMov: 0.3, title: 0.3, era: 0 };
+  const TYPE_K = { who: 1, find: 0.8, odd: 0.8, pair: 0.6, movement: 0.4, findMov: 0.3, era: 0, older: 0 };
   function trainWeight(q, ok, k) {
     const s = st(q); if (!s || !k) return;
     s.w = ok ? s.w * (1 - 0.4 * k) : Math.min(1.2, s.w + 0.25 * k);
@@ -191,7 +193,7 @@
   // чтобы его закрепить, и с прошлого знакомства прошло хотя бы 3 вопроса
   function pendingNew(ses) {
     if (!introReason().ok) return null;
-    if (ses.i > 0 && (ses.len - ses.i < 6 || ses.i - ses.lastIntro < 3)) return null;
+    if (ses.i > 0 && (ses.len - ses.i < 5 || ses.i - ses.lastIntro < 3)) return null;
     if (ses.newIds.length >= (known().length < WARMUP ? 6 : 4)) return null;
     return nextNew();
   }
@@ -241,7 +243,7 @@
     odd: { label: 'Лишняя картина', min: 5, w: 1.5, we: 2 },
     pair: { label: 'Один ли художник', min: 7, w: 1.2, we: 1 },
     era: { label: 'Когда написана', min: 6, w: 1, we: 0 },
-    title: { label: 'Название картины', min: 3, w: 0.4, we: 0 }
+    older: { label: 'Какая картина старше', min: 3, w: 1.3, we: 0 }
   };
   function availableTypes() {
     const k = known(), movs = new Set(k.map(q => A[q].m)).size;
@@ -289,13 +291,16 @@
       const ps = shuffle([p, ...others]);
       return { type, q, prompt: `Где картина в стиле «${MOVEMENTS[a.m].n}»?`, paintings: ps, options: ps.map(x => ({ v: x.id })), correct: p.id, grid: true };
     }
-    if (type === 'title') {
-      const titled = a.p.filter(p => p.t && !S.broken[p.id]);
-      const fam = titled.filter(p => p.fam);
-      const p = fam.length ? fam[rnd(fam.length)] : null;
-      const others = [...new Set(shuffle(titled.filter(x => x !== p).map(x => x.t)))].filter(t => p && t !== p.t).slice(0, 3);
-      if (!p || others.length < 3) return build(q, 'who', opt);
-      return { type, q, prompt: `Как называется эта картина (${a.n})?`, paintings: [p], options: shuffle([p.t, ...others]).map(t => ({ v: t, label: t })), correct: p.t, longOpts: true };
+    if (type === 'older') {
+      const p = pickPainting(q, { unseenOnly: uo, needYear: true }); if (!p) return build(q, 'who', opt);
+      // разница в годах сужается с ростом навыка: от ~150 лет до ~40
+      const gap = Math.round(150 - 110 * skill(type).d);
+      const cand = shuffle(k.filter(x => x !== q)).slice(0, 25).map(x => pickPainting(x, { unseenOnly: uo, needYear: true })).filter(Boolean);
+      const dy = x => Math.abs(x.y - p.y);
+      const o = cand.find(x => dy(x) >= gap && dy(x) <= gap * 3 + 60) || cand.filter(x => dy(x) >= 30).sort((a, b) => Math.abs(dy(a) - gap) - Math.abs(dy(b) - gap))[0];
+      if (!o) return build(q, 'who', opt);
+      const ps = shuffle([p, o]);
+      return { type, q, b: o.a, prompt: 'Какая картина старше?', paintings: ps, options: ps.map(x => ({ v: x.id })), correct: (p.y < o.y ? p : o).id, grid: true };
     }
     if (type === 'era') {
       const p = pickPainting(q, { unseenOnly: uo, needYear: true }); if (!p) return build(q, 'who', opt);
@@ -446,7 +451,7 @@
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
     examStatus, pendingNew, poolLoad, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
-    stats, shuffle, TYPES, skill, pace, WARMUP,
+    stats, shuffle, TYPES, skill, pace, WARMUP, build,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },
     importState(o, { silent = false } = {}) {
