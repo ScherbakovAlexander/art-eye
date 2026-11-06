@@ -2,6 +2,7 @@ import json, urllib.request, urllib.parse, time, random, sys, os
 UA={'User-Agent':'ArtEyeTrainer/0.1 (personal learning app)','Accept':'application/sparql-results+json'}
 SKIP={'Maurice de Vlaminck','Pablo Picasso','Georges Braque','Giorgio de Chirico','René Magritte','Salvador Dalí'}
 FIX={'Pieter Bruegel the Elder':'Q43270'}
+FRESCO={'Giotto','Piero della Francesca'}
 PRINTS={'Katsushika Hokusai','Utagawa Hiroshige','Kitagawa Utamaro'}
 def sparql(q):
     data=urllib.parse.urlencode({'query':q}).encode()
@@ -18,7 +19,7 @@ for a in json.load(open('qids.json',encoding='utf-8')):
     n=a['name']
     if n in SKIP or n in cache: continue
     qid=FIX.get(n,a['qid'])
-    types='wd:Q3305213 wd:Q18218093 wd:Q11060274' if n in PRINTS else 'wd:Q3305213'
+    types='wd:Q3305213 wd:Q18218093 wd:Q11060274' if n in PRINTS else ('wd:Q3305213 wd:Q134194' if n in FRESCO else 'wd:Q3305213')
     q=f'''SELECT ?p (SAMPLE(?img) AS ?img) (MIN(YEAR(?d)) AS ?y) (SAMPLE(?ru) AS ?ru) (SAMPLE(?en) AS ?en) (SAMPLE(?sl) AS ?sl) WHERE {{
  ?p p:P170 ?st. ?st ps:P170 wd:{qid}. FILTER NOT EXISTS {{ ?st pq:P5102 [] }} FILTER NOT EXISTS {{ ?st pq:P1774 [] }}
  ?p wdt:P31 ?t. VALUES ?t {{ {types} }}
