@@ -6,7 +6,7 @@
   const KEY = 'arteye.v1';
   const DAY = 864e5;
   const now = () => Date.now();
-  const today = () => new Date(now()).toISOString().slice(0, 10);
+  const today = () => { const d = new Date(now()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
   // ---------- данные ----------
   const A = {};          // qid -> artist (+ paintings)
@@ -29,8 +29,9 @@
       v: 1, artists: {}, seen: {}, conf: {}, log: [], exams: [], movSeen: {}, broken: {},
       day: { d: today(), intro: 0, answers: 0, correct: 0 },
       gate: { sinceExam: 0, failedAt: 0, sessionsSinceFail: 0 },
-      settings: { newPerDay: 12, sessionLen: 10 },
+      settings: { newPerDay: 20, sessionLen: 10 },
       skill: {},          // по типу вопроса: { n, ok, recent[], d } — d ∈ [0,1] сложность этого типа
+      days: {},           // дата → число ответов (для серии дней)
       updatedAt: 0, owner: null
     };
   }
@@ -44,6 +45,9 @@
     if (!s.bal2) { s.settings.newPerDay = Math.max(6, s.settings.newPerDay); s.day.intro = 0; s.bal2 = 1; }
     if (!s.bal3) { s.settings.newPerDay = Math.max(12, s.settings.newPerDay); s.bal3 = 1; }
     // занятия короче
+    if (!s.bal5) { if (s.settings.newPerDay <= 12) s.settings.newPerDay = 20; s.bal5 = 1; }
+    // серия дней: восстанавливаем по журналу ответов из старых версий
+    if (!s.bal6) { s.days = s.days || {}; s.bal6 = 1; for (const l of s.log || []) { const d = new Date(l.t), k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; s.days[k] = (s.days[k] || 0) + 1; } }
     if (!s.bal4) { if (s.settings.sessionLen >= 15) s.settings.sessionLen = 10; s.bal4 = 1; }
     // вес «в работе» для художников из старых версий — по накопленной стабильности
     for (const q in s.artists) { const a = s.artists[q]; if (a.w == null) a.w = a.stab < 1 ? 0.6 : a.stab < 7 ? 0.3 : 0.1; }
@@ -96,6 +100,19 @@
   }
   const dueList = () => known().filter(q => st(q).due <= now()).sort((a, b) => overdue(b) - overdue(a));
   const overdue = q => (now() - st(q).due) / (st(q).stab * DAY);
+  // доля пройденного: каждый художник от 0 до 1 по стабильности (30 дней — освоен), среднее по всем
+  function mastery() {
+    const one = q => { const s = st(q); return s ? Math.min(1, Math.log(1 + s.stab) / Math.log(31)) : 0; };
+    return ORDER.reduce((a, q) => a + one(q), 0) / ORDER.length;
+  }
+  // серия дней подряд с занятиями (сегодняшний день может быть ещё не начат)
+  function dayStreak() {
+    const d = new Date(now()); let n = 0;
+    const key = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    if (!S.days[key(d)]) d.setDate(d.getDate() - 1);
+    while (S.days[key(d)]) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
   function recentAccuracy(n = 30) {
     const l = S.log.filter(x => !x.ex).slice(-n); if (l.length < 8) return null;
     return l.filter(x => x.ok).length / l.length;
@@ -162,7 +179,7 @@
     if (!cand.length) return null;
     const minTier = Math.min(...cand.map(q => A[q].t));
     const p = Math.min(1, k.length / 45);
-    const same = k.length >= 4 && Math.random() < 0.1 + 0.25 * p;
+    const same = k.length >= 4 && Math.random() < 0.1 + 0.25 * p + (pace().mode === 'fast' ? 0.15 : 0);
     const T = same ? 1 : Math.random() * (0.2 + 0.6 * p);
     const movCount = m => k.filter(q => A[q].m === m).length;
     return cand.filter(q => A[q].t <= minTier + 1)
@@ -224,14 +241,14 @@
   function distractors(q, n, type = 'who', pool = known()) {
     const t = A[q], s = st(q);
     const d = skill(type).d;
-    const mult = 0.15 + 1.6 * d * (0.5 + 0.5 * Math.min(1, (s ? s.stab : 0) / 5));
+    // чем выше навык типа вопроса и чем увереннее знаком художник, тем похожее варианты
+    const mult = 0.2 + 2.5 * d * (0.6 + 0.4 * Math.min(1, (s ? s.stab : 0) / 3));
     const cand = pool.filter(c => c !== q);
     const w = cand.map(c => {
       const o = A[c];
-      const same = o.m === t.m ? 1 : 0;
-      const era = Math.abs(o.mid - t.mid) < 60 ? 1 : 0;
+      const sim = o.m === t.m ? 1 : 0.75 * Math.exp(-Math.abs(o.mid - t.mid) / 50);
       const conf = (S.conf[q + '|' + c] || 0) + (S.conf[c + '|' + q] || 0);
-      return 1 + mult * (5 * same + 2 * era) + 3 * Math.min(conf, 4);
+      return 1 + mult * 8 * sim * sim + 3 * Math.min(conf, 4);
     });
     return weightedSample(cand, w, n);
   }
@@ -264,11 +281,12 @@
     return weighted(av, av.map(t => {
       let w = exam ? TYPES[t].we : TYPES[t].w;
       if (easy && t !== 'who' && t !== 'movement') w *= 0.4;
+      if (!exam) w *= 1.4 - 0.8 * skill(t).d;
       if (last[1] === t) w *= t === 'who' && last[0] !== t ? 0.5 : 0.2;
       return w || 0.0001;
     }));
   }
-  const nOpts = type => skill(type).d < 0.2 ? 3 : 4;
+  const nOpts = type => { const d = skill(type).d; return d < 0.2 ? 3 : type === 'who' && d >= 0.85 && known().length >= 12 ? 6 : 4; };
   function build(q, type, opt = {}) {
     const a = A[q], uo = !!opt.exam;
     const k = known();
@@ -307,13 +325,13 @@
     }
     if (type === 'era') {
       const p = pickPainting(q, { unseenOnly: uo, needYear: true }); if (!p) return build(q, 'who', opt);
-      // столетия; варианты не уходят раньше 1300 и позже 1900-х
-      const span = 100;
-      const bin = Math.floor(p.y / span) * span;
-      const lo = Math.max(0, (bin - 1600) / span), hi = Math.min(3, (bin - 1300) / span);
+      // правильный ответ — 40 лет, год картины в середине (±5). Шаг между вариантами: от 100 лет
+      // (новичок, между вариантами промежутки) до 40 (опытный, варианты встык)
+      const c = Math.round(p.y / 10) * 10, step = Math.round((100 - 60 * skill(type).d) / 10) * 10;
+      const lo = Math.max(0, Math.ceil(3 - (2000 - c) / step)), hi = Math.min(3, Math.floor((c - 1220) / step));
       const shift = lo <= hi ? lo + rnd(hi - lo + 1) : rnd(4);
-      const opts = [0, 1, 2, 3].map(i => bin + (i - shift) * span);
-      return { type, q, prompt: 'Когда написана?', paintings: [p], options: opts.map(b => ({ v: b, label: `${b}–${b + span - 1}` })), correct: bin };
+      const opts = [0, 1, 2, 3].map(i => c + (i - shift) * step);
+      return { type, q, prompt: 'Когда написана?', paintings: [p], options: opts.map(m => ({ v: m, label: `${m - 20}–${m + 20}` })), correct: c };
     }
     if (type === 'find') {
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
@@ -356,6 +374,7 @@
     }
     S.log.push({ t: now(), q: Q.q, ty: Q.type, ok, ex: exam ? 1 : 0 }); if (S.log.length > 500) S.log.shift();
     S.day.answers++; if (ok) S.day.correct++;
+    S.days[today()] = (S.days[today()] || 0) + 1;
     save();
     return ok;
   }
@@ -366,7 +385,7 @@
   // интервалах внутри занятия (1, 3, 6, 10, 15-й вопрос), (3) просроченные по SR,
   // (4) остальные — чаще слабые. Один художник не идёт два раза подряд.
   function newSession() {
-    return { newIds: [], i: 0, len: S.settings.sessionLen, lastIntro: -99, retry: [], recentT: [], recentTy: [], ok: 0, done: 0 };
+    return { newIds: [], res: {}, start: { mastery: mastery(), seen: Object.keys(S.seen).length, known: known().length }, i: 0, len: S.settings.sessionLen, lastIntro: -99, retry: [], recentT: [], recentTy: [], ok: 0, done: 0 };
   }
   function nextTarget(ses) {
     const k = known();
@@ -390,6 +409,8 @@
   }
   function afterAnswer(ses, Q, ok) {
     ses.i++; ses.done++; if (ok) ses.ok++;
+    ses.streak = ok ? (ses.streak || 0) + 1 : 0; ses.best = Math.max(ses.best || 0, ses.streak);
+    const r = ses.res[Q.q] = ses.res[Q.q] || { n: 0, ok: 0 }; r.n++; if (ok) r.ok++;
     if (!ok) ses.retry.push({ q: Q.q, at: ses.i + 3 });
   }
   function endSession() {
@@ -402,7 +423,8 @@
   // недавно введённых — чаще. Порог 80%; провал откатывает стабильность ошибочных художников.
   function buildExam() {
     const k = known();
-    const n = Math.min(25, Math.max(15, k.length * 2));
+    // «большая проверка»: каждый знакомый художник хотя бы раз (до 30 вопросов)
+    const n = EXAMS_ON ? Math.min(25, Math.max(15, k.length * 2)) : Math.min(30, Math.max(15, k.length));
     const recent = [...k].sort((a, b) => st(b).intro - st(a).intro).slice(0, 6);
     let targets = shuffle([...k]);
     while (targets.length < n) targets.push(weighted(k, k.map(q => recent.includes(q) ? 3 : 1)));
@@ -420,7 +442,7 @@
     // бонус за уверенную сдачу
     for (const q in per) if (per[q].ok === per[q].n) { const s = st(q); s.stab *= 1.3; s.due = now() + s.stab * DAY; }
     S.exams.push({ t: now(), score, n: ex.answers.length, pass, artists: known().length });
-    if (pass) S.gate = { sinceExam: 0, failedAt: 0, sessionsSinceFail: 0 };
+    if (pass || !EXAMS_ON) S.gate = { sinceExam: 0, failedAt: 0, sessionsSinceFail: 0 };
     else { S.gate.failedAt = now(); S.gate.sessionsSinceFail = 0; }
     save();
     return { score, pass, per };
@@ -454,7 +476,7 @@
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
     examStatus, pendingNew, poolLoad, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
-    stats, shuffle, TYPES, skill, pace, WARMUP, build,
+    stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },
     importState(o, { silent = false } = {}) {

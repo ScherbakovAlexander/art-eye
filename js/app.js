@@ -89,6 +89,7 @@
       </div>` : '';
     render(`${nav()}
       <p class="muted hero">Учимся узнавать художников и стили — по картинам, которые видим впервые.</p>
+      ${masteryBar()}
       <div class="statrow">
         <div><b>${s.known}</b><span>из ${s.all} художников</span></div>
         <div><b>${s.seenCount}</b><span>картин увидено</span></div>
@@ -98,8 +99,24 @@
         <h3>Занятие</h3><p>${plan}</p>
         <button class="primary" onclick="App.session()">Начать</button>
       </div>
-      ${examCard}`, e => { if (e.key === 'Enter') App.session(); });
+      ${examCard}${checkCard(k)}`, e => { if (e.key === 'Enter') App.session(); });
   }
+
+  function masteryBar() {
+    const m = E.mastery(), streak = E.dayStreak();
+    return `<div class="mastery"><div class="mh"><span>Пройдено <b>${(m * 100).toFixed(m < 0.1 ? 1 : 0)}%</b></span>${streak > 1 ? `<span class="streak">🔥 ${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд</span>` : ''}</div>
+      <div class="bar big"><div style="width:${(m * 100).toFixed(1)}%"></div></div>
+      <div class="muted small">Художник считается освоенным, когда вы узнаёте его и через месяц.</div></div>`;
+  }
+  function checkCard(k) {
+    if (k.length < 8) return '';
+    const last = E.S.exams.slice(-1)[0], best = E.S.exams.length ? Math.max(...E.S.exams.map(x => x.score)) : null;
+    return `<div class="card"><h3>Большая проверка</h3>
+      <p>По одному вопросу на каждого знакомого художника (${Math.min(30, Math.max(15, k.length))} вопр.), только новые для вас картины и без подсказок. Ни на что не влияет — просто узнать, насколько хорошо получается.</p>
+      ${last ? `<p class="muted small">Последний раз: ${pct(last.score)} · лучший: ${pct(best)}</p>` : ''}
+      <button onclick="App.exam()">Пройти проверку</button></div>`;
+  }
+  const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
 
   // ---------- занятие ----------
   let ses = null, Q = null, nextQ = null;
@@ -191,7 +208,7 @@
     App._pick = v => { if (App._locked) return; App._locked = true; onPick(isNaN(v) || Q.type !== 'era' ? v : +v); };
     App._locked = false;
     render(`<div class="stage quiz ${exam ? 'is-exam' : ''}">${topRow(progress)}
-          <div class="prompt">${exam ? '<span class="tag">экзамен</span>' : ''}${Q.prompt}</div>
+          <div class="prompt">${exam ? '<span class="tag">проверка</span>' : ''}${Q.prompt}</div>
           <div class="pics" id="pics">${pics}</div><div class="bottom" id="fb">${opts}</div>
         </div>`, e => {
       const n = +e.key; if (n >= 1 && n <= Q.options.length) App._pick(String(Q.options[n - 1].v));
@@ -258,9 +275,27 @@
       <h2>Занятие окончено</h2>
       <div class="big">${ses.done ? pct(ses.ok / ses.done) : '—'}</div><p class="muted">${ses.ok} из ${ses.done} верно</p>
       ${learned.length ? `<p>Новые художники: <b>${learned.join(', ')}</b></p>` : ''}
+      ${funFacts(ses)}
       <button class="primary" onclick="App.home()">На главную</button>
       <button onclick="App.session()">Ещё занятие</button></div>`, e => { if (e.key === 'Enter') home(); });
     ses = null;
+  }
+  // забавные итоги: серия, лучший художник, вехи
+  function funFacts(ses) {
+    const f = [];
+    if (ses.best >= 5) f.push(`🎯 Серия без ошибок: <b>${ses.best}</b> подряд`);
+    const top = Object.entries(ses.res).filter(([, r]) => r.n >= 2 && r.ok === r.n).sort((a, b) => b[1].n - a[1].n)[0];
+    if (top) f.push(`👁 Ни одной ошибки с художником <b>${A[top[0]].n}</b> (${top[1].n} из ${top[1].n})`);
+    const m0 = ses.start.mastery, m1 = E.mastery();
+    if (m1 > m0) f.push(`📈 Прохождение: ${(m0 * 100).toFixed(1)}% → <b>${(m1 * 100).toFixed(1)}%</b>`);
+    const seen = Object.keys(E.S.seen).length;
+    const mile = [50, 100, 250, 500, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 7000].filter(x => ses.start.seen < x && seen >= x).pop();
+    if (mile) f.push(`🖼 Вы увидели уже <b>${mile}</b> картин! Это как ${mile >= 1000 ? 'целый большой музей' : mile >= 250 ? 'несколько залов Эрмитажа' : 'зал музея'}.`);
+    const k = E.known().length, km = [5, 10, 20, 30, 40, 50, 60, 75, 90, 100, 114].filter(x => ses.start.known < x && k >= x).pop();
+    if (km) f.push(`🏅 Знакомых художников: <b>${km}</b>`);
+    const streak = E.dayStreak();
+    if (streak >= 2) f.push(`🔥 ${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд с занятиями`);
+    return f.length ? `<div class="facts">${f.map(x => `<div>${x}</div>`).join('')}</div>` : '';
   }
 
   // ---------- экзамен ----------
@@ -294,10 +329,10 @@
       return `Нужно было найти: ${A[Q.q].n}`;
     };
     const correctPic = a => a.Q.grid ? E.paintingById(a.Q.correct) : a.Q.paintings[0];
-    render(`${nav()}<div class="card center ${r.pass ? 'pass' : 'fail'}">
-      <div class="kicker">Экзамен</div><div class="big">${pct(r.score)}</div>
-      <h2>${r.pass ? 'Сдан! Открыты новые художники' : 'Не сдан — нужно 80%'}</h2>
-      <p class="muted">${r.pass ? 'Художники, где вы не ошиблись ни разу, получили бонус к интервалу.' : 'Ошибочные художники вернутся в повторение. Пересдача — после одного занятия.'}</p>
+    render(`${nav()}<div class="card center">
+      <div class="kicker">Большая проверка</div><div class="big">${pct(r.score)}</div>
+      <h2>${r.score >= 0.9 ? 'Отлично!' : r.score >= 0.75 ? 'Хорошо!' : r.score >= 0.5 ? 'Неплохо' : 'Есть над чем поработать'}</h2>
+      <p class="muted">Узнано художников без ошибок: ${Object.values(r.per).filter(x => x.ok === x.n).length} из ${Object.keys(r.per).length}. Художники с ошибками будут чаще попадаться в занятиях.</p>
       <button class="primary" onclick="App.home()">На главную</button></div>
       ${wrong.length ? `<h3>Разбор ошибок</h3><div class="mistakes">${wrong.map(a => { const p = correctPic(a); return `<div class="mistake"><figure>${img(p, 500)}</figure><div>${answerText(a)}${caption(p)}</div></div>`; }).join('')}</div>` : ''}`);
   }

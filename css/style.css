@@ -232,3 +232,13 @@ button.choose { margin-top: 8px; }
   .pair, .grid.two { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
   .ava { width: 52px; height: 52px; }
 }
+
+/* прохождение и итоги */
+.mastery { margin: 6px 0 12px; }
+.mastery .mh { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.mastery b { font-family: var(--serif); font-size: 1.5em; font-weight: normal; color: var(--accent); }
+.streak { font-size: .9em; }
+.bar.big { height: 10px; border-radius: 5px; margin-bottom: 4px; }
+.bar.big div { border-radius: 5px; }
+.facts { text-align: left; display: grid; gap: 8px; margin: 14px auto; max-width: 480px; }
+.facts div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: .95em; line-height: 1.35; }
