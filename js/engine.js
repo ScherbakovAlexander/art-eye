@@ -9,6 +9,7 @@
   const today = () => { const d = new Date(now()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
   // ---------- данные ----------
+  const HIDDEN = new Set(window.HIDDEN || []);
   const A = {};          // qid -> artist (+ paintings)
   const ORDER = [];      // порядок из curriculum
   for (const a of window.ARTISTS) {
@@ -17,7 +18,9 @@
     // год вне жизни художника — ошибка в Wikidata, лучше не показывать
     const [born, died] = (a.y.match(/\d{4}/g) || []).map(Number);
     const year = y => y && born && (y < born + 12 || y > died + 1) ? null : y;
-    a.p = raw.map((r, i) => ({ id: a.q + '#' + i, a: a.q, h: r[0], f: r[1], y: year(r[2]), t: r[3], fam: !!r[4] }));
+    // all — все картины (индекс = номер в id), p — те, что показываем (без скрытых)
+    a.all = raw.map((r, i) => ({ id: a.q + '#' + i, a: a.q, h: r[0], f: r[1], y: year(r[2]), t: r[3], fam: !!r[4] }));
+    a.p = a.all.filter(x => !HIDDEN.has(x.id));
     a.mid = midYear(a.y);
     A[a.q] = a; ORDER.push(a.q);
   }
@@ -378,7 +381,7 @@
     save();
     return ok;
   }
-  function paintingById(id) { const [q, i] = id.split('#'); return A[q].p[+i]; }
+  function paintingById(id) { const [q, i] = id.split('#'); return A[q].all[+i]; }
 
   // ---------- занятие ----------
   // Очередь цели: (1) повтор ошибок через 3 вопроса, (2) новые художники на расширяющихся
