@@ -289,7 +289,7 @@
       return w || 0.0001;
     }));
   }
-  const nOpts = type => { const d = skill(type).d; return d < 0.2 ? 3 : type === 'who' && d >= 0.85 && known().length >= 12 ? 6 : 4; };
+  const nOpts = type => skill(type).d < 0.2 ? 3 : 4;
   function build(q, type, opt = {}) {
     const a = A[q], uo = !!opt.exam;
     const k = known();
@@ -328,13 +328,13 @@
     }
     if (type === 'era') {
       const p = pickPainting(q, { unseenOnly: uo, needYear: true }); if (!p) return build(q, 'who', opt);
-      // правильный ответ — 40 лет, год картины в середине (±5). Шаг между вариантами: от 100 лет
-      // (новичок, между вариантами промежутки) до 40 (опытный, варианты встык)
-      const c = Math.round(p.y / 10) * 10, step = Math.round((100 - 60 * skill(type).d) / 10) * 10;
-      const lo = Math.max(0, Math.ceil(3 - (2000 - c) / step)), hi = Math.min(3, Math.floor((c - 1220) / step));
+      // ширина варианта: 100 лет у новичка, сужается до 40 с ростом навыка этого типа вопросов.
+      // Год картины — в середине правильного варианта, варианты идут встык
+      const w = Math.round((100 - 60 * skill(type).d) / 20) * 20, c = Math.round(p.y / 10) * 10;
+      const lo = Math.max(0, Math.ceil(3 - (2000 - c) / w)), hi = Math.min(3, Math.floor((c - 1220) / w));
       const shift = lo <= hi ? lo + rnd(hi - lo + 1) : rnd(4);
-      const opts = [0, 1, 2, 3].map(i => c + (i - shift) * step);
-      return { type, q, prompt: 'Когда написана?', paintings: [p], options: opts.map(m => ({ v: m, label: `${m - 20}–${m + 20}` })), correct: c };
+      const opts = [0, 1, 2, 3].map(i => c + (i - shift) * w);
+      return { type, q, prompt: 'Когда написана?', paintings: [p], options: opts.map(m => ({ v: m, label: `${m - w / 2}–${m + w / 2}` })), correct: c };
     }
     if (type === 'find') {
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;

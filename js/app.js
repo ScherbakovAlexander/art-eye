@@ -99,7 +99,7 @@
         <h3>Занятие</h3><p>${plan}</p>
         <button class="primary" onclick="App.session()">Начать</button>
       </div>
-      ${examCard}${checkCard(k)}`, e => { if (e.key === 'Enter') App.session(); });
+      ${examCard}`, e => { if (e.key === 'Enter') App.session(); });
   }
 
   function masteryBar() {
@@ -107,14 +107,6 @@
     return `<div class="mastery"><div class="mh"><span>Пройдено <b>${(m * 100).toFixed(m < 0.1 ? 1 : 0)}%</b></span>${streak > 1 ? `<span class="streak">🔥 ${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд</span>` : ''}</div>
       <div class="bar big"><div style="width:${(m * 100).toFixed(1)}%"></div></div>
       <div class="muted small">Художник считается освоенным, когда вы узнаёте его и через месяц.</div></div>`;
-  }
-  function checkCard(k) {
-    if (k.length < 8) return '';
-    const last = E.S.exams.slice(-1)[0], best = E.S.exams.length ? Math.max(...E.S.exams.map(x => x.score)) : null;
-    return `<div class="card"><h3>Большая проверка</h3>
-      <p>По одному вопросу на каждого знакомого художника (${Math.min(30, Math.max(15, k.length))} вопр.), только новые для вас картины и без подсказок. Ни на что не влияет — просто узнать, насколько хорошо получается.</p>
-      ${last ? `<p class="muted small">Последний раз: ${pct(last.score)} · лучший: ${pct(best)}</p>` : ''}
-      <button onclick="App.exam()">Пройти проверку</button></div>`;
   }
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
 
