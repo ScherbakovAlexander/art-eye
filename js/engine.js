@@ -172,7 +172,10 @@
   const WARMUP = 10;
   // Экзамен предлагается после 8 новых художников, но обязательным становится только после 14
   // (или после провала) — до этого новые художники продолжают открываться.
+  // экзамен пока отключён: не предлагается и не блокирует новых художников (код оставлен на будущее)
+  const EXAMS_ON = false;
   function examStatus() {
+    if (!EXAMS_ON) return { need: false, block: false, canTake: false, left: 0 };
     const k = known().length, n = S.gate.sinceExam;
     const need = k >= WARMUP && (n >= 8 || !!S.gate.failedAt);
     const block = need && (n >= 14 || !!S.gate.failedAt);
