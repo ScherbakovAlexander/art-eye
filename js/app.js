@@ -251,9 +251,12 @@
         hint = `<div class="hint"><b>${t.n}</b>: ${t.s.slice(0, 2).join('; ')}<br><b>${other.n}</b>: ${other.s.slice(0, 2).join('; ')}</div>`;
       } else hint = `<div class="hint"><b>${t.n}</b>: ${t.s.slice(0, 2).join('; ')}</div>`;
     }
-    document.getElementById('fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}">
-      <div class="fbody"><div class="verdict">${head}</div>${capHtml}${hint}</div>
-      <button class="primary wide" onclick="App._cont()">Дальше</button></div>`;
+    // разбор не меньше вариантов ответа, которые он заменяет — картина над ним не прыгает
+    const fbEl = document.getElementById('fb');
+    fbEl.style.minHeight = fbEl.offsetHeight + 'px';
+    fbEl.innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}">
+      <div class="fhead"><div class="verdict">${head}</div><button class="primary next" onclick="App._cont()">Дальше ›</button></div>
+      <div class="fbody">${capHtml}${hint}</div></div>`;
     App._cont = quizStep;
     onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); quizStep(); } };
     // заранее готовим следующий вопрос, если дальше не знакомство с новым художником

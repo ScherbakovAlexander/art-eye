@@ -241,17 +241,35 @@
   // ---------- дистракторы ----------
   // Сложность растёт вместе со стабильностью: для нового художника варианты контрастные,
   // для уверенного — из того же направления и эпохи, плюс те, кого вы с ним путали.
+  // трудность пары художников 0–1 из data/pairs.js (смесь похожести CLIP и путаницы классификатора), null — нет данных
+  const pairDiff = (() => {
+    const P = window.PAIRS; if (!P) return () => null;
+    const K = P.q.length, ix = {}; P.q.forEach((q, i) => { ix[q] = i; });
+    return (a, b) => {
+      let i = ix[a], j = ix[b];
+      if (i == null || j == null || i === j) return null;
+      if (i > j) [i, j] = [j, i];
+      const k = i * K - i * (i + 1) / 2 + (j - i - 1);
+      return +P.v.substr(2 * k, 2) / 99;
+    };
+  })();
+
   function distractors(q, n, type = 'who', pool = known()) {
     const t = A[q], s = st(q);
-    const d = skill(type).d;
-    // чем выше навык типа вопроса и чем увереннее знаком художник, тем похожее варианты
-    const mult = 0.2 + 2.5 * d * (0.6 + 0.4 * Math.min(1, (s ? s.stab : 0) / 3));
+    // уровень 0–1: навык типа вопроса и то, насколько уверенно знаком этот художник
+    const level = skill(type).d * (0.6 + 0.4 * Math.min(1, (s ? s.stab : 0) / 3));
+    // целевая трудность вопроса: растёт с уровнем, но со случайным разбросом —
+    // новичку иногда выпадает трудный вопрос, опытному иногда лёгкий
+    const gauss = Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+    const T = 0.15 + 0.7 * level + 0.18 * gauss;
     const cand = pool.filter(c => c !== q);
     const w = cand.map(c => {
       const o = A[c];
-      const sim = o.m === t.m ? 1 : 0.75 * Math.exp(-Math.abs(o.mid - t.mid) / 50);
+      const pd = pairDiff(q, c);
+      const sim = pd != null ? pd : o.m === t.m ? 1 : 0.75 * Math.exp(-Math.abs(o.mid - t.mid) / 50);
       const conf = (S.conf[q + '|' + c] || 0) + (S.conf[c + '|' + q] || 0);
-      return 1 + mult * 8 * sim * sim + 3 * Math.min(conf, 4);
+      // варианты — из пар, близких к целевой трудности; художники, которых уже путали, — чаще
+      return Math.exp(-(((sim - T) / 0.15) ** 2)) + 0.03 + 3 * Math.min(conf, 4);
     });
     return weightedSample(cand, w, n);
   }
@@ -479,7 +497,7 @@
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
     examStatus, pendingNew, poolLoad, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
-    stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak,
+    stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak, pairDiff,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },
     importState(o, { silent = false } = {}) {
