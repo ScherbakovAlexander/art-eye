@@ -8,20 +8,23 @@
   firebase.initializeApp(cfg);
   const auth = firebase.auth(), db = firebase.firestore();
   const E = window.Engine;
-  let timer = null, ready = false;
+  let ready = false;
   const ref = () => db.collection('users').doc(Sync.user.uid);
   const weight = s => (s.log ? s.log.length : 0) + Object.keys(s.artists || {}).length * 10;
 
   async function push() {
     if (!Sync.user || !ready) return;
-    clearTimeout(timer); timer = null;
     try {
       await ref().set({ state: JSON.stringify(E.S), updatedAt: Date.now(), email: Sync.user.email || '' });
       Sync.status = 'Сохранено ' + new Date().toLocaleTimeString('ru');
     } catch (e) { Sync.status = 'Не удалось сохранить: ' + e.message; }
   }
-  E.onSave = () => { if (Sync.user && ready) { clearTimeout(timer); timer = setTimeout(push, 2000); } };
-  addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && timer) push(); });
+  // на сервер — только в конце занятия (Sync.flush из app.js); по ходу лишь помечаем, что есть несохранённое.
+  // Страховка: если вкладку закрыли или свернули посреди занятия — отправляем то, что накопилось.
+  let dirty = false;
+  E.onSave = () => { if (Sync.user && ready) dirty = true; };
+  Sync.flush = () => { if (dirty) { dirty = false; return push(); } };
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Sync.flush(); });
 
   // При входе: если локальный прогресс гостевой — берём тот, где больше сделано;
   // если он уже принадлежит этому аккаунту — более свежий; чужой локальный — заменяем.

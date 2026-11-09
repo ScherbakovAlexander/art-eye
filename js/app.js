@@ -72,6 +72,7 @@
 
   // ---------- главная ----------
   function home() {
+    if (window.Sync && Sync.flush) Sync.flush();   // вышли из занятия на главную — тоже отправляем
     const s = E.stats(), r = E.introReason(), ex = E.examStatus();
     const k = E.known();
     let plan;
@@ -265,6 +266,7 @@
 
   function sessionEnd() {
     E.endSession();
+    if (window.Sync && Sync.flush) Sync.flush();   // прогресс уходит на сервер раз за занятие
     const learned = ses.newIds.map(n => A[n.q].n);
     render(`${nav()}<div class="card center">
       <h2>Занятие окончено</h2>
@@ -312,6 +314,7 @@
   }
   function examResult(ex) {
     const r = E.finishExam(ex);
+    if (window.Sync && Sync.flush) Sync.flush();
     const wrong = ex.answers.filter(a => !a.ok);
     const answerText = a => {
       const Q = a.Q;
