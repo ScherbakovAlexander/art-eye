@@ -96,13 +96,42 @@
         <div><b>${s.seenCount}</b><span>картин увидено</span></div>
         <div><b>${s.acc7 == null ? '—' : pct(s.acc7)}</b><span>точность за 7 дней</span></div>
       </div>
-      <div class="card">
+      ${E.BETA ? sessionCard() : `<div class="card">
         <h3>Занятие</h3><p>${plan}</p>
         <button class="primary" onclick="App.session()">Начать</button>
-      </div>
+      </div>`}
       ${examCard}`, e => { if (e.key === 'Enter') App.session(); });
   }
 
+  // стенд: номер и состав занятия. Новый художник в начале — анонс; «сюрприз» в середине не выдаём.
+  function sessionCard() {
+    // план устарел, если с тех пор изменился прогресс (вход в аккаунт, загрузка файла)
+    if (!planned || planned.start.known !== E.known().length || planned.sesNo !== E.S.sessions) { planned = E.newSession(); planned.sesNo = E.S.sessions; }
+    const p = planned, num = (E.S.sessions || 0) + 1;
+    const start = p.intros.filter(x => x.at === 0).map(x => x.q);
+    const later = new Set(p.intros.filter(x => x.at > 0).map(x => x.q));
+    const counts = {};
+    for (const q of new Set(p.plan)) {
+      if (!q || later.has(q)) continue;
+      const k = start.includes(q) ? 1 : E.level(q).k;
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    const lv = E.LEVELS.filter(l => counts[l.k]).map(l => `<span class="lvchip lv${l.k}">${l.icon} ${counts[l.k]} ${l.name}</span>`).join('');
+    const news = start.length
+      ? `<p class="announce">✨ ${E.known().length ? `Сегодня знакомство с ${start.length > 1 ? `${start.length} новыми художниками` : 'новым художником'}` : 'Знакомство с первыми художниками'}</p>` : '';
+    return `<div class="card">
+        <h3>Занятие ${num}</h3>
+        <p class="muted">${p.len} вопросов${lv ? ' · художники:' : ''}</p>
+        ${lv ? `<div class="lvchips">${lv}</div>` : ''}
+        ${news}
+        <button class="primary" onclick="App.session()">Начать</button>
+      </div>`;
+  }
+  // сколько художников на каждом уровне (стенд)
+  function levelCounts() {
+    const c = {}; for (const q of E.known()) { const k = E.level(q).k; c[k] = (c[k] || 0) + 1; }
+    return `<div class="lvchips">${E.LEVELS.slice(1).map(l => `<span class="lvchip lv${l.k} ${c[l.k] ? '' : 'zero'}">${l.icon} ${c[l.k] || 0} ${l.name}</span>`).join('')}</div>`;
+  }
   function masteryBar() {
     const m = E.mastery(), streak = E.dayStreak();
     return `<div class="mastery"><div class="mh"><span>Пройдено <b>${(m * 100).toFixed(m < 0.1 ? 1 : 0)}%</b></span>${streak > 1 ? `<span class="streak">🔥 ${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд</span>` : ''}</div>
@@ -113,8 +142,10 @@
 
   // ---------- занятие ----------
   let ses = null, Q = null, nextQ = null;
+  let planned = null;   // стенд: занятие планируется уже на главной, чтобы показать его состав
   function session() {
-    ses = E.newSession(); nextQ = null;
+    ses = planned || E.newSession(); planned = null; nextQ = null;
+    ses.startLv = Object.fromEntries(E.known().map(q => [q, E.level(q).k]));
     quizStep();
   }
   // новый художник вводится прямо по ходу занятия, когда пул освободился
@@ -272,10 +303,18 @@
       <h2>Занятие окончено</h2>
       <div class="big">${ses.done ? pct(ses.ok / ses.done) : '—'}</div><p class="muted">${ses.ok} из ${ses.done} верно</p>
       ${learned.length ? `<p>Новые художники: <b>${learned.join(', ')}</b></p>` : ''}
+      ${E.BETA ? levelUps(ses) : ''}
       ${funFacts(ses)}
       <button class="primary" onclick="App.home()">На главную</button>
       <button onclick="App.session()">Ещё занятие</button></div>`, e => { if (e.key === 'Enter') home(); });
     ses = null;
+  }
+  // стенд: кто за занятие поднялся на уровень
+  function levelUps(ses) {
+    const ups = Object.keys(ses.res).filter(q => ses.startLv && ses.startLv[q] != null && E.level(q).k > ses.startLv[q]);
+    if (!ups.length) return '';
+    return `<div class="facts">${ups.map(q => { const a = E.LEVELS[ses.startLv[q]], b = E.level(q);
+      return `<div>⬆ <b>${A[q].n}</b>: ${a.icon} ${a.name} → ${b.icon} <b>${b.name}</b></div>`; }).join('')}</div>`;
   }
   // забавные итоги: серия, лучший художник, вехи
   function funFacts(ses) {
@@ -346,13 +385,14 @@
       if (!k.length) return `<div class="mov locked"><div class="mov-h">${M[m].n} <span class="muted">${M[m].y}</span></div><div class="muted small">${locked} художн. закрыто</div></div>`;
       return `<div class="mov"><div class="mov-h">${M[m].n} <span class="muted">${M[m].y}</span></div>
         ${k.map(q => { const st = E.st(q), lv = E.level(q), seen = A[q].p.filter(p => E.S.seen[p.id]).length;
-          return `<div class="art"><span class="nm">${A[q].n}</span><span class="lv lv${lv.k}">${lv.name}</span>
+          return `<div class="art"><span class="nm">${A[q].n}</span><span class="lv lv${lv.k}">${lv.icon ? lv.icon + ' ' : ''}${lv.name}</span>
             <span class="small muted">${st.n ? pct(st.ok / st.n) : '—'} · ${seen}/${A[q].p.length} картин · интервал ${st.stab < 1 ? Math.round(st.stab * 24) + ' ч' : Math.round(st.stab) + ' дн'}</span></div>`; }).join('')}
         ${locked ? `<div class="muted small">ещё ${locked} закрыто</div>` : ''}</div>`;
     }).join('');
     const exams = E.S.exams.slice(-8).reverse().map(x => `<div class="small">${new Date(x.t).toLocaleDateString('ru')} — ${pct(x.score)} ${x.pass ? '✓' : '✗'} <span class="muted">(${x.n} вопр., ${x.artists} худ.)</span></div>`).join('');
     render(`${nav()}<h2>Прогресс</h2>
       <div class="statrow"><div><b>${s.known}/${s.all}</b><span>художников</span></div><div><b>${s.seenCount}/${s.total}</b><span>картин увидено</span></div><div><b>${s.ans7}</b><span>ответов за 7 дней</span></div></div>
+      ${E.BETA ? `<div class="card"><h4>Уровни художников</h4>${levelCounts()}</div>` : ''}
       ${s.confs.length ? `<div class="card"><h4>Чаще всего путаете</h4>${s.confs.map(c => `<div class="small">${A[c.x].n} → ${A[c.y].n} <span class="muted">×${c.n}</span></div>`).join('')}</div>` : ''}
       ${typeStats()}
       ${exams ? `<div class="card"><h4>Экзамены</h4>${exams}</div>` : ''}
@@ -380,7 +420,7 @@
     q = q || k[k.length - 1];
     const a = A[q];
     render(`${nav()}<div class="chips">${k.map(x => `<button class="${x === q ? 'on' : ''}" onclick="App.gallery('${x}')">${A[x].n}</button>`).join('')}</div>
-      <div class="ghead">${portrait(q)}<h2>${a.n} <span class="muted small">${a.y} · ${M[a.m].n}</span></h2></div>
+      <div class="ghead">${portrait(q)}<h2>${a.n} <span class="muted small">${a.y} · ${M[a.m].n}</span>${E.BETA ? ` <span class="lv lv${E.level(q).k}">${E.level(q).icon} ${E.level(q).name}</span>` : ''}</h2></div>
       <div class="wall">${[...a.p].sort((x, y) => (x.y || 9999) - (y.y || 9999)).map(p => `<button onclick="App.lightbox('${p.id}')">${img(p, 330)}</button>`).join('')}</div>`);
   }
   function lightbox(id) {

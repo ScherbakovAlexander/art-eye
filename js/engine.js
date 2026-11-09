@@ -52,6 +52,8 @@
     if (!s.bal5) { if (s.settings.newPerDay <= 12) s.settings.newPerDay = 20; s.bal5 = 1; }
     // серия дней: восстанавливаем по журналу ответов из старых версий
     if (!s.bal6) { s.days = s.days || {}; s.bal6 = 1; for (const l of s.log || []) { const d = new Date(l.t), k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; s.days[k] = (s.days[k] || 0) + 1; } }
+    // номер занятия: раньше не считали — прикидываем по числу ответов (≈10 на занятие)
+    if (s.sessions == null) s.sessions = Math.round(Object.values(s.days || {}).reduce((a, b) => a + b, 0) / 10);
     if (!s.bal4) { if (s.settings.sessionLen >= 15) s.settings.sessionLen = 10; s.bal4 = 1; }
     // вес «в работе» для художников из старых версий — по накопленной стабильности
     for (const q in s.artists) { const a = s.artists[q]; if (a.w == null) a.w = a.stab < 1 ? 0.6 : a.stab < 7 ? 0.3 : 0.1; }
@@ -95,7 +97,22 @@
     s.last = now(); s.n++; if (ok) s.ok++;
     s.recent.push(ok ? 1 : 0); if (s.recent.length > 10) s.recent.shift();
   }
+  // уровни на тестовом стенде: подробнее, по «стабильности» (сколько дней художник держится в памяти)
+  const LEVELS = [
+    { k: 0, name: 'закрыт', icon: '🔒' }, { k: 1, name: 'новый', icon: '🌱' }, { k: 2, name: 'учу', icon: '✏️' },
+    { k: 3, name: 'повторяю', icon: '🔁' }, { k: 4, name: 'знаю', icon: '✅' }, { k: 5, name: 'освоен', icon: '🏅' }, { k: 6, name: 'эксперт', icon: '👑' }];
+  function levelBeta(q) {
+    const s = st(q); if (!s) return LEVELS[0];
+    const r = s.recent || [], acc = n => r.slice(-n).reduce((a, b) => a + b, 0) / Math.max(1, r.slice(-n).length);
+    if (s.n < 3) return LEVELS[1];
+    if (s.stab < 2 || (r.length >= 5 && acc(5) < 0.6)) return LEVELS[2];
+    if (s.stab < 14) return LEVELS[3];
+    if (s.stab < 30) return LEVELS[4];
+    if (s.stab >= 90 && r.length >= 10 && acc(10) >= 0.9) return LEVELS[6];
+    return LEVELS[5];
+  }
   function level(q) {
+    if (BETA) return levelBeta(q);
     const s = st(q); if (!s) return { k: 0, name: 'закрыт' };
     if (s.stab < 1) return { k: 1, name: 'знакомство' };
     if (s.stab < 7) return { k: 2, name: 'учу' };
@@ -506,6 +523,7 @@
   }
   function endSession() {
     if (S.gate.failedAt) S.gate.sessionsSinceFail++;
+    S.sessions = (S.sessions || 0) + 1;
     save();
   }
 
@@ -566,7 +584,7 @@
 
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
-    examStatus, pendingNew, poolLoad, BETA, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
+    examStatus, pendingNew, poolLoad, BETA, LEVELS, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
     stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak, pairDiff,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },

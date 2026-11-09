@@ -251,3 +251,10 @@ button.choose { margin-top: 8px; }
 
 /* пометка тестового стенда (beta/) */
 .beta { font: 600 .55em system-ui, sans-serif; color: #1a1408; background: var(--accent); border-radius: 6px; padding: 2px 6px; vertical-align: middle; letter-spacing: .02em; }
+.lv5 { color: #1a1408; background: var(--accent); border-color: var(--accent); }
+.lv6 { color: #1a1408; background: linear-gradient(90deg, #e9c46a, #d7a65a); border-color: #e9c46a; font-weight: 600; }
+.lvchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.lvchip { font-size: .85em; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); white-space: nowrap; }
+.lvchip.zero { opacity: .4; }
+.lvchip.lv5, .lvchip.lv6 { color: #1a1408; }
+.announce { color: var(--accent); margin: 4px 0 12px; }
