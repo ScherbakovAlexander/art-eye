@@ -37,6 +37,90 @@
     else if (w) { el.dataset.w = 0; el.src = url(p, 0); }
     else { E.markBroken(p.id); el.classList.add('broken'); }
   }
+  // ---------- увеличение картины щипком ----------
+  // Щипок двумя пальцами по картине — она увеличивается поверх страницы и остаётся увеличенной;
+  // одним пальцем её можно двигать, тап — возвращает на место. Остальная страница не масштабируется.
+  const Zoom = (() => {
+    let z = null; // {ov, im, x, y, w, h, s, tx, ty, g}
+    const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const mid = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+    const apply = () => { z.im.style.transform = `translate(${z.tx}px,${z.ty}px) scale(${z.s})`; };
+    function source(t) {
+      if (!(t instanceof Element)) return null;
+      if (t.tagName === 'IMG' && t.closest('.frame, .pic, .lightbox, .mistake')) return t;
+      const box = t.closest('.frame, .pic, .lightbox figure');
+      return box && box.querySelector('img');
+    }
+    function open(src) {
+      const r = src.getBoundingClientRect();
+      if (!r.width || !r.height) return false;
+      const ov = document.createElement('div'); ov.className = 'zoomov';
+      const im = new Image(); im.src = src.currentSrc || src.src; im.alt = '';
+      Object.assign(im.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+      ov.appendChild(im); document.body.appendChild(ov);
+      requestAnimationFrame(() => ov.classList.add('on'));
+      z = { ov, im, x: r.left, y: r.top, s: 1, tx: 0, ty: 0, g: null };
+      // крупная версия — подгружается и подменяется незаметно
+      const p = src.dataset.id && E.paintingById(src.dataset.id);
+      if (p && +src.dataset.w !== 0) { const hi = new Image(); hi.onload = () => { if (z && z.im === im) im.src = hi.src; }; hi.src = url(p, 1920); }
+      src.style.visibility = 'hidden'; z.src = src;
+      return true;
+    }
+    function close() {
+      if (!z) return;
+      const { ov, im, src } = z; z = null;
+      ov.classList.remove('on'); im.style.transition = 'transform .2s ease'; im.style.transform = '';
+      setTimeout(() => { ov.remove(); src.style.visibility = ''; }, 200);
+    }
+    // жест: два пальца — масштаб вокруг середины; один палец — сдвиг; короткий тап без движения — закрыть
+    function begin(ts) {
+      if (ts.length >= 2) {
+        const m = mid(ts[0], ts[1]);
+        z.g = { pinch: true, d0: dist(ts[0], ts[1]), m0: m, s0: z.s, tx0: z.tx, ty0: z.ty, moved: true };
+      } else {
+        const t = ts[0];
+        z.g = { pinch: false, x0: t.clientX, y0: t.clientY, tx0: z.tx, ty0: z.ty, t0: Date.now(), moved: z.g ? z.g.moved : false };
+      }
+    }
+    function move(ts) {
+      const g = z.g; if (!g) return;
+      if (g.pinch && ts.length >= 2) {
+        const m = mid(ts[0], ts[1]);
+        const s = Math.min(8, Math.max(1, g.s0 * dist(ts[0], ts[1]) / g.d0));
+        // точка картины, бывшая под серединой пальцев, остаётся под ней
+        const px = (g.m0.x - z.x - g.tx0) / g.s0, py = (g.m0.y - z.y - g.ty0) / g.s0;
+        z.s = s; z.tx = m.x - z.x - px * s; z.ty = m.y - z.y - py * s;
+        apply();
+      } else if (!g.pinch && ts.length === 1) {
+        const dx = ts[0].clientX - g.x0, dy = ts[0].clientY - g.y0;
+        if (Math.abs(dx) + Math.abs(dy) > 8) g.moved = true;
+        z.tx = g.tx0 + dx; z.ty = g.ty0 + dy; apply();
+      }
+    }
+    const stop = e => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); };
+    document.addEventListener('touchstart', e => {
+      if (!z) {
+        if (e.touches.length !== 2) return;
+        const src = source(e.touches[0].target) || source(e.touches[1].target);
+        if (!src || !open(src)) return;
+      }
+      stop(e); begin(e.touches);
+    }, { capture: true, passive: false });
+    document.addEventListener('touchmove', e => { if (z) { stop(e); move(e.touches); } else if (e.touches.length > 1) e.preventDefault(); }, { capture: true, passive: false });
+    document.addEventListener('touchend', e => {
+      if (!z) return;
+      stop(e);
+      const g = z.g;
+      if (e.touches.length) { begin(e.touches); return; } // один палец остался — дальше двигаем им
+      z.g = null;
+      if (g && !g.pinch && !g.moved && Date.now() - g.t0 < 350) close();
+      else if (z.s < 1.05) close();
+    }, { capture: true, passive: false });
+    document.addEventListener('touchcancel', () => { if (z) z.g = null; }, { capture: true });
+    // Safari на iPhone масштабирует страницу своими жестами — гасим их
+    ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+    return { close };
+  })();
   function preload(Q) { if (Q) Q.paintings.forEach(p => { const i = new Image(); i.src = url(p, Q.grid ? 500 : 960); }); }
 
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

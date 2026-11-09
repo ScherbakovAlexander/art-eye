@@ -1,3 +1,5 @@
+/* страница не масштабируется ни щипком, ни двойным тапом — картины увеличиваются сами (Zoom в app.js) */
+html { touch-action: pan-x pan-y; }
 :root {
   --bg: #161514; --panel: #211f1d; --line: #34302c; --text: #ece6dc; --muted: #9a9187;
   --accent: #d7a65a; --ok: #6fae7a; --bad: #d0675a;
@@ -258,3 +260,7 @@ button.choose { margin-top: 8px; }
 .lvchip.zero { opacity: .4; }
 .lvchip.lv5, .lvchip.lv6 { color: #1a1408; }
 .announce { color: var(--accent); margin: 4px 0 12px; }
+/* увеличенная щипком картина */
+.zoomov { position: fixed; inset: 0; z-index: 30; background: rgba(10,9,8,0); transition: background .2s; touch-action: none; overflow: hidden; }
+.zoomov.on { background: rgba(10,9,8,.88); }
+.zoomov img { position: fixed; object-fit: contain; transform-origin: 0 0; max-width: none; max-height: none; background: none; will-change: transform; }
