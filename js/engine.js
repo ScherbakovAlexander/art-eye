@@ -56,6 +56,19 @@
     if (s.sessions == null) s.sessions = Math.round(Object.values(s.days || {}).reduce((a, b) => a + b, 0) / 10);
     if (!s.bal4) { if (s.settings.sessionLen >= 15) s.settings.sessionLen = 10; s.bal4 = 1; }
     // вес «в работе» для художников из старых версий — по накопленной стабильности
+    // доказательства знания для прогресса из старых версий — по журналу последних ответов
+    if (!s.bal7) {
+      s.bal7 = 1;
+      const day = t => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+      for (const q in s.artists) Object.assign(s.artists[q], { streak: 0, sDays: [], sGap: 0, lastAns: 0 });
+      for (const l of s.log || []) {
+        const a = s.artists[l.q]; if (!a || !['who', 'find', 'odd', 'pair'].includes(l.ty)) continue;
+        if (!l.ok) { Object.assign(a, { streak: 0, sDays: [], sGap: 0, lastAns: l.t }); continue; }
+        if (a.streak && a.lastAns) a.sGap = Math.max(a.sGap, (l.t - a.lastAns) / DAY);
+        a.streak++; const d = day(l.t); if (!a.sDays.includes(d)) { a.sDays.push(d); if (a.sDays.length > 5) a.sDays.shift(); }
+        a.lastAns = l.t;
+      }
+    }
     for (const q in s.artists) { const a = s.artists[q]; if (a.w == null) a.w = a.stab < 1 ? 0.6 : a.stab < 7 ? 0.3 : 0.1; }
     return s;
   }
@@ -73,11 +86,23 @@
   // ---------- интервальные повторения (на уровне художника) ----------
   // stab — «стабильность» в днях: через сколько пора повторить. Верный ответ растит её тем сильнее,
   // чем дольше прошло с прошлого раза (повтор раньше срока почти ничего не даёт), ошибка — резко режет.
-  function introduce(q, ses = null) {
+  // «Узнаёте сами?» (стенд): перед знакомством — картина нового художника без подсказок.
+  // Варианты из всех художников, в том числе незнакомых, — методом исключения не угадать.
+  // Спрашиваем про самых известных (ярус 1) или если точность высокая: остальных дети почти никогда не знают.
+  const wantPrecheck = q => BETA && (A[q].t === 1 || (recentAccuracy() || 0) >= 0.85);
+  function precheckQuestion(q, exclude = []) {
+    const p = pickPainting(q, { exclude, unseenOnly: true }); if (!p) return null;
+    const others = ORDER.filter(x => x !== q);
+    const ds = weightedSample(others, others.map(x => 0.3 + 3 * (pairDiff(q, x) || 0.3) ** 2), 3);
+    return { type: 'who', q, prompt: 'Новый художник! Узнаёте автора?', paintings: [p], options: shuffle([q, ...ds]).map(x => ({ v: x, label: A[x].n })), correct: q, pre: true };
+  }
+  function introduce(q, ses = null, { pre = false } = {}) {
     rollDay();
     // художники разгона не тратят дневной лимит
     if (known().length >= WARMUP) S.day.intro++;
-    S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [], w: 1 };
+    S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [], w: 1, streak: 0, sDays: [], sGap: 0 };
+    // узнал сам (2 из 2 без подсказок) — сразу «знаю»: длинный интервал, почти не «в работе»
+    if (pre) Object.assign(S.artists[q], { stab: 7, due: now() + 7 * DAY, w: 0.1, n: 2, ok: 2, recent: [1, 1], streak: 2, sDays: [today()], lastAns: now(), pre: 1 });
     if (ses) { ses.newIds.push({ q, at: ses.i }); ses.lastIntro = ses.i; if (!ses.plan) ses.len = Math.min(ses.len + 2, S.settings.sessionLen + 6); }
     S.movSeen[A[q].m] = S.movSeen[A[q].m] || now();
     S.gate.sinceExam++;
@@ -97,19 +122,35 @@
     s.last = now(); s.n++; if (ok) s.ok++;
     s.recent.push(ok ? 1 : 0); if (s.recent.length > 10) s.recent.shift();
   }
-  // уровни на тестовом стенде: подробнее, по «стабильности» (сколько дней художник держится в памяти)
+  // доказательства знания (для уровней): серия верных ответов подряд, в скольких разных днях она набрана,
+  // самый длинный перерыв внутри серии; верные ответы на трудных вопросах. Ошибка обнуляет серию.
+  // Учитываются только вопросы, где надо узнать именно художника (кто автор, найти, лишняя, один ли).
+  function evidence(q, ok, hard) {
+    const s = st(q); if (!s) return;
+    if (!ok) { s.streak = 0; s.sDays = []; s.sGap = 0; s.pre = 0; s.lastAns = now(); return; }
+    const d = today();
+    if (s.streak && s.lastAns) s.sGap = Math.max(s.sGap || 0, (now() - s.lastAns) / DAY);
+    s.streak = (s.streak || 0) + 1;
+    s.sDays = s.sDays || []; if (!s.sDays.includes(d)) { s.sDays.push(d); if (s.sDays.length > 5) s.sDays.shift(); }
+    if (hard) s.hardOk = (s.hardOk || 0) + 1;
+    s.lastAns = now();
+  }
+  // уровни на тестовом стенде — по доказательствам, а не по календарю:
+  // знаю — 5 верных подряд в 2 разных днях (или узнал сам, без ошибок с тех пор);
+  // освоен — 10 верных подряд в 3 разных днях, с перерывом хотя бы 3 дня; эксперт — ещё и 10 верных на трудных вопросах
   const LEVELS = [
     { k: 0, name: 'закрыт', icon: '🔒' }, { k: 1, name: 'новый', icon: '🌱' }, { k: 2, name: 'учу', icon: '✏️' },
     { k: 3, name: 'повторяю', icon: '🔁' }, { k: 4, name: 'знаю', icon: '✅' }, { k: 5, name: 'освоен', icon: '🏅' }, { k: 6, name: 'эксперт', icon: '👑' }];
   function levelBeta(q) {
     const s = st(q); if (!s) return LEVELS[0];
     const r = s.recent || [], acc = n => r.slice(-n).reduce((a, b) => a + b, 0) / Math.max(1, r.slice(-n).length);
+    const streak = s.streak || 0, days = (s.sDays || []).length;
+    const master = streak >= 10 && days >= 3 && (s.sGap || 0) >= 3;
+    if (master) return (s.hardOk || 0) >= 10 ? LEVELS[6] : LEVELS[5];
+    if ((streak >= 5 && days >= 2) || s.pre) return LEVELS[4];
     if (s.n < 3) return LEVELS[1];
-    if (s.stab < 1 || (r.length >= 5 && acc(5) < 0.6)) return LEVELS[2];
-    if (s.stab < 7) return LEVELS[3];
-    if (s.stab < 30) return LEVELS[4];
-    if (s.stab >= 90 && r.length >= 10 && acc(10) >= 0.9) return LEVELS[6];
-    return LEVELS[5];
+    if (r.length >= 5 && acc(5) < 0.6) return LEVELS[2];
+    return LEVELS[3];
   }
   function level(q) {
     if (BETA) return levelBeta(q);
@@ -122,8 +163,11 @@
   const dueList = () => known().filter(q => st(q).due <= now()).sort((a, b) => overdue(b) - overdue(a));
   const overdue = q => (now() - st(q).due) / (st(q).stab * DAY);
   // доля пройденного: каждый художник от 0 до 1 по стабильности (30 дней — освоен), среднее по всем
+  // на стенде — от уровня: новый 5%, учу 15%, повторяю 35%, знаю 70%, освоен и эксперт — 100%
+  const LEVEL_SHARE = [0, 0.05, 0.15, 0.35, 0.7, 1, 1];
   function mastery() {
-    const one = q => { const s = st(q); return s ? Math.min(1, Math.log(1 + s.stab) / Math.log(31)) : 0; };
+    const one = BETA ? q => LEVEL_SHARE[levelBeta(q).k]
+      : q => { const s = st(q); return s ? Math.min(1, Math.log(1 + s.stab) / Math.log(31)) : 0; };
     return ORDER.reduce((a, q) => a + one(q), 0) / ORDER.length;
   }
   // серия дней подряд с занятиями (сегодняшний день может быть ещё не начат)
@@ -333,7 +377,8 @@
     if (type === 'who') {
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
       const ds = distractors(q, Math.min(nOpts(type) - 1, k.length - 1), type);
-      return { type, q, prompt: 'Кто автор?', paintings: [p], options: shuffle([q, ...ds]).map(x => ({ v: x, label: A[x].n })), correct: q };
+      const hard = ds.some(d => (pairDiff(q, d) || 0) >= 0.75);   // среди вариантов — очень похожий художник
+      return { type, q, prompt: 'Кто автор?', paintings: [p], options: shuffle([q, ...ds]).map(x => ({ v: x, label: A[x].n })), correct: q, hard };
     }
     if (type === 'movement') {
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
@@ -403,6 +448,7 @@
     const ok = v === Q.correct;
     const w = exam ? 1 : TYPE_K[Q.type];
     if (w > 0) grade(Q.q, ok, w);
+    if (w >= 0.6) evidence(Q.q, ok, Q.hard);
     trainWeight(Q.q, ok, exam ? 0.7 : w);
     if (!exam) trainSkill(Q.type, ok);
     if (!ok) {
@@ -584,7 +630,7 @@
 
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
-    examStatus, pendingNew, poolLoad, BETA, LEVELS, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
+    examStatus, pendingNew, poolLoad, BETA, LEVELS, wantPrecheck, precheckQuestion, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
     stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak, pairDiff,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },

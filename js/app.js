@@ -116,7 +116,7 @@
       const k = start.includes(q) ? 1 : E.level(q).k;
       counts[k] = (counts[k] || 0) + 1;
     }
-    const lv = E.LEVELS.filter(l => counts[l.k]).map(l => `<span class="lvchip lv${l.k}">${l.icon} ${counts[l.k]} ${l.name}</span>`).join('');
+    const lv = E.LEVELS.filter(l => counts[l.k]).map(l => `<span class="lvchip lv${l.k}">${l.icon} ${counts[l.k]} ${lvWord(l, counts[l.k])}</span>`).join('');
     const news = start.length
       ? `<p class="announce">✨ ${E.known().length ? `Сегодня знакомство с ${start.length > 1 ? `${start.length} новыми художниками` : 'новым художником'}` : 'Знакомство с первыми художниками'}</p>` : '';
     return `<div class="card">
@@ -127,16 +127,18 @@
         <button class="primary" onclick="App.session()">Начать</button>
       </div>`;
   }
+  // «2 новых», «1 освоен», «5 освоено»; глагольные уровни (учу, повторяю, знаю) не склоняются
+  const lvWord = (l, n) => ({ 1: plural(n, 'новый', 'новых', 'новых'), 5: plural(n, 'освоен', 'освоено', 'освоено'), 6: plural(n, 'эксперт', 'эксперта', 'экспертов') })[l.k] || l.name;
   // сколько художников на каждом уровне (стенд)
   function levelCounts() {
     const c = {}; for (const q of E.known()) { const k = E.level(q).k; c[k] = (c[k] || 0) + 1; }
-    return `<div class="lvchips">${E.LEVELS.slice(1).map(l => `<span class="lvchip lv${l.k} ${c[l.k] ? '' : 'zero'}">${l.icon} ${c[l.k] || 0} ${l.name}</span>`).join('')}</div>`;
+    return `<div class="lvchips">${E.LEVELS.slice(1).map(l => `<span class="lvchip lv${l.k} ${c[l.k] ? '' : 'zero'}">${l.icon} ${c[l.k] || 0} ${lvWord(l, c[l.k] || 0)}</span>`).join('')}</div>`;
   }
   function masteryBar() {
     const m = E.mastery(), streak = E.dayStreak();
     return `<div class="mastery"><div class="mh"><span>Пройдено <b>${(m * 100).toFixed(m < 0.1 ? 1 : 0)}%</b></span>${streak > 1 ? `<span class="streak">🔥 ${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд</span>` : ''}</div>
       <div class="bar big"><div style="width:${(m * 100).toFixed(1)}%"></div></div>
-      <div class="muted small">Художник считается освоенным, когда вы узнаёте его и через месяц.</div></div>`;
+      <div class="muted small">${E.BETA ? 'Художник освоен, когда вы узнаёте его 10 раз подряд в разные дни.' : 'Художник считается освоенным, когда вы узнаёте его и через месяц.'}</div></div>`;
   }
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
 
@@ -150,6 +152,41 @@
   }
   // новый художник вводится прямо по ходу занятия, когда пул освободился
   function startIntro(q) {
+    if (E.wantPrecheck(q)) return precheck(q, 0, []);
+    introNow(q);
+  }
+  // стенд: «Узнаёте автора?» — 2 картины без подсказок. Оба раза верно — художник уже знаком, учить не надо.
+  function precheck(q, j, used) {
+    const P = E.precheckQuestion(q, used);
+    if (!P) return introNow(q);
+    P.paintings.forEach(E.markSeen); E.save();
+    drawQuestion(P, { progress: ses.i / ses.len, onPick: v => {
+      const ok = v === P.correct;
+      document.querySelectorAll('[data-v]').forEach(b => b.classList.add(b.dataset.v === q ? 'right' : b.dataset.v === v ? 'wrong' : 'dim'));
+      const fb = document.getElementById('fb'); fb.style.minHeight = fb.offsetHeight + 'px';
+      const msg = ok ? (j === 0 ? '✓ Верно! Ещё одна картина' : '✓ Верно! Вы его уже знаете') : `Это <b>${A[q].n}</b> — давайте познакомимся`;
+      fb.innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}"><div class="fhead"><div class="verdict">${msg}</div>
+        <button class="primary next" onclick="App._cont()">Дальше ›</button></div><div class="fbody"></div></div>`;
+      App._cont = () => ok ? (j === 0 ? precheck(q, 1, used.concat(P.paintings[0].id)) : recognized(q)) : introNow(q);
+      onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); App._cont(); } };
+    } });
+  }
+  function recognized(q) {
+    E.introduce(q, ses, { pre: true }); nextQ = null;
+    const a = A[q];
+    render(`<div class="stage">${topRow()}
+        <div class="scroll center">
+          <div class="kicker">Новый художник</div>
+          <div class="head">${portrait(q)}<div><h2>${a.n}</h2><div class="muted small">${a.y} · ${a.c} · ${M[a.m].n}</div></div></div>
+          <p class="announce">🎉 Вы его уже знаете — сразу уровень ✅ «знаю»</p>
+          <div class="traits"><h4>Что замечать</h4>${a.s.map(x => `<span>${x}</span>`).join('')}</div>
+        </div>
+        <div class="navrow"><button onclick="App._look()">Посмотреть картины</button><button class="primary" onclick="App._cont()">Дальше ›</button></div></div>`,
+      e => { if (e.key === 'Enter') quizStep(); }, true);
+    App._cont = quizStep;
+    App._look = () => intro(q);
+  }
+  function introNow(q) {
     const movFirst = !E.S.movSeen[A[q].m];
     E.introduce(q, ses); nextQ = null;
     if (movFirst) movementCard(A[q].m, () => intro(q)); else intro(q);
