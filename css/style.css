@@ -248,3 +248,6 @@ button.choose { margin-top: 8px; }
 .bar.big div { border-radius: 5px; }
 .facts { text-align: left; display: grid; gap: 8px; margin: 14px auto; max-width: 480px; }
 .facts div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: .95em; line-height: 1.35; }
+
+/* пометка тестового стенда (beta/) */
+.beta { font: 600 .55em system-ui, sans-serif; color: #1a1408; background: var(--accent); border-radius: 6px; padding: 2px 6px; vertical-align: middle; letter-spacing: .02em; }

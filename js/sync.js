@@ -10,12 +10,14 @@
   const E = window.Engine;
   let ready = false;
   const ref = () => db.collection('users').doc(Sync.user.uid);
+  // тестовый стенд хранит прогресс в отдельном поле того же документа — основной не трогается
+  const FIELD = window.BETA ? 'stateBeta' : 'state';
   const weight = s => (s.log ? s.log.length : 0) + Object.keys(s.artists || {}).length * 10;
 
   async function push() {
     if (!Sync.user || !ready) return;
     try {
-      await ref().set({ state: JSON.stringify(E.S), updatedAt: Date.now(), email: Sync.user.email || '' });
+      await ref().set({ [FIELD]: JSON.stringify(E.S), updatedAt: Date.now(), email: Sync.user.email || '' }, { merge: true });
       Sync.status = 'Сохранено ' + new Date().toLocaleTimeString('ru');
     } catch (e) { Sync.status = 'Не удалось сохранить: ' + e.message; }
   }
@@ -33,7 +35,7 @@
     if (u) {
       try {
         const snap = await ref().get();
-        const remote = snap.exists ? JSON.parse(snap.data().state) : null;
+        const remote = snap.exists && snap.data()[FIELD] ? JSON.parse(snap.data()[FIELD]) : null;
         const local = E.S;
         let useRemote;
         if (!remote) useRemote = false;

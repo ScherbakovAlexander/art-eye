@@ -3,7 +3,8 @@
 // поэтому выучить конкретное полотно бесполезно — приходится схватывать почерк.
 
 (function () {
-  const KEY = 'arteye.v1';
+  const BETA = !!window.BETA;   // тестовый стенд (beta/): свой прогресс и занятие, спланированное заранее
+  const KEY = BETA ? 'arteye.beta' : 'arteye.v1';
   const DAY = 864e5;
   const now = () => Date.now();
   const today = () => { const d = new Date(now()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -75,7 +76,7 @@
     // художники разгона не тратят дневной лимит
     if (known().length >= WARMUP) S.day.intro++;
     S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [], w: 1 };
-    if (ses) { ses.newIds.push({ q, at: ses.i }); ses.lastIntro = ses.i; ses.len = Math.min(ses.len + 2, S.settings.sessionLen + 6); }
+    if (ses) { ses.newIds.push({ q, at: ses.i }); ses.lastIntro = ses.i; if (!ses.plan) ses.len = Math.min(ses.len + 2, S.settings.sessionLen + 6); }
     S.movSeen[A[q].m] = S.movSeen[A[q].m] || now();
     S.gate.sinceExam++;
     save();
@@ -215,6 +216,7 @@
   // новый художник для этого места занятия: пул не заполнен, в занятии хватает вопросов,
   // чтобы его закрепить, и с прошлого знакомства прошло хотя бы 3 вопроса
   function pendingNew(ses) {
+    if (BETA && ses.plan) return plannedNew(ses);
     if (!introReason().ok) return null;
     if (ses.i > 0 && (ses.len - ses.i < 5 || ses.i - ses.lastIntro < 3)) return null;
     if (ses.newIds.length >= (known().length < WARMUP ? 6 : 4)) return null;
@@ -406,9 +408,77 @@
   // интервалах внутри занятия (1, 3, 6, 10, 15-й вопрос), (3) просроченные по SR,
   // (4) остальные — чаще слабые. Один художник не идёт два раза подряд.
   function newSession() {
-    return { newIds: [], res: {}, start: { mastery: mastery(), seen: Object.keys(S.seen).length, known: known().length }, i: 0, len: S.settings.sessionLen, lastIntro: -99, retry: [], recentT: [], recentTy: [], ok: 0, done: 0 };
+    const ses = { newIds: [], res: {}, start: { mastery: mastery(), seen: Object.keys(S.seen).length, known: known().length }, i: 0, len: S.settings.sessionLen, lastIntro: -99, retry: [], recentT: [], recentTy: [], ok: 0, done: 0 };
+    if (BETA) planSession(ses);
+    return ses;
   }
-  function nextTarget(ses) {
+
+  // ---------- тестовый стенд: занятие планируется заранее ----------
+  // Всегда 12 вопросов. До первого вопроса решаем, сколько будет новых художников (по ёмкости пула)
+  // и где их показать: первого — в начале, следующего — сюрпризом в середине (если место есть).
+  // У каждого нового — 3 места после знакомства, случайно и не подряд. Остальные места — жребий
+  // с весами среди 16 самых приоритетных художников, так что рост их числа не размывает вероятности.
+  // Ошибки план не меняют: они сдвигают выученность (вес, стабильность) и скажутся на следующих занятиях.
+  const PLAN_LEN = 12, SHORTLIST = 16, NEW_SLOTS = 3;
+  const priority = q => st(q).w + 0.04 + (isDue(q) ? 0.35 : 0);
+  function planSession(ses) {
+    const k = known(), r = introReason();
+    ses.len = PLAN_LEN;
+    // сколько новых: пока нагрузка ниже ёмкости (+1 — за занятие верные ответы её снижают,
+    // это место и достаётся «сюрпризу» в середине); на разгоне больше
+    const intros = [];
+    if (r.ok) {
+      const left = k.length >= WARMUP ? S.settings.newPerDay - S.day.intro : Infinity;
+      const max = Math.min(k.length < WARMUP ? 4 : 2, left);
+      let load = r.load;
+      while (intros.length < max && (load < r.cap + 1 || k.length + intros.length < 3)) {
+        const q = nextNew(intros.map(x => x.q)); if (!q) break;
+        intros.push({ q }); load += 1;
+      }
+    }
+    // в начале — столько, чтобы знакомых было хотя бы 3 (из кого собирать варианты), минимум один;
+    // остальные — в середине (с 4-го по 8-й вопрос), с промежутком не меньше 3
+    const atStart = Math.min(intros.length, Math.max(1, 3 - k.length));
+    let pos = 3 + rnd(2);
+    intros.forEach((x, j) => { x.at = j < atStart ? 0 : pos; if (j >= atStart) pos += 3 + rnd(2); });
+    // кто не помещается (нужно место на 3 вопроса не подряд) — в следующее занятие
+    for (let j = intros.length - 1; j >= 0; j--) if (intros[j].at > PLAN_LEN - NEW_SLOTS * 2 + 1) intros.splice(j, 1);
+    let plan;
+    const near = (i, q) => plan[i - 1] === q || plan[i + 1] === q;
+    // места нового художника: после знакомства, случайно, не подряд
+    // (сначала тем, кого знакомим позже: у них меньше свободных мест). Если кому-то не хватило — ещё попытка.
+    for (let attempt = 0; attempt < 30; attempt++) {
+      plan = Array(PLAN_LEN).fill(null);
+      let full = true;
+      for (const x of intros.slice().reverse()) {
+        const free = shuffle([...Array(PLAN_LEN - x.at).keys()].map(i => i + x.at));
+        let n = 0;
+        for (const i of free) if (n < NEW_SLOTS && !plan[i] && !near(i, x.q)) { plan[i] = x.q; n++; }
+        if (n < NEW_SLOTS) full = false;
+      }
+      if (full) break;
+    }
+    // остальные места: жребий среди 16 самых приоритетных (уже знакомые + те новые, что к этому месту показаны)
+    const short = k.slice().sort((a, b) => priority(b) - priority(a)).slice(0, SHORTLIST);
+    for (let i = 0; i < PLAN_LEN; i++) {
+      if (plan[i]) continue;
+      const pool = short.map(q => [q, priority(q)]).concat(intros.filter(x => x.at <= i).map(x => [x.q, 1]));
+      let cand = pool.filter(([q]) => !near(i, q));
+      if (!cand.length) cand = pool;
+      plan[i] = cand.length ? weighted(cand.map(c => c[0]), cand.map(c => c[1])) : null;
+    }
+    ses.plan = plan; ses.intros = intros;
+  }
+  // запланированный новый художник для этого места
+  function plannedNew(ses) {
+    const x = (ses.intros || []).find(x => x.at <= ses.i && !S.artists[x.q]);
+    return x ? x.q : null;
+  }
+  function nextTarget(ses, offPlan = false) {
+    if (BETA && ses.plan && !offPlan) {
+      const q = ses.plan[ses.i];
+      if (q && S.artists[q]) return q;
+    }
     const k = known();
     const notRecent = q => !ses.recentT.slice(-2).includes(q) || k.length < 3;
     const r = ses.retry.findIndex(x => x.at <= ses.i && notRecent(x.q));
@@ -422,7 +492,7 @@
   }
   function nextQuestion(ses) {
     for (let tries = 0; tries < 5; tries++) {
-      const q = nextTarget(ses);
+      const q = nextTarget(ses, tries >= 2);   // если по плану вопрос не собрался — берём другого художника
       const Q = build(q, chooseType(q, false, ses.recentTy));
       if (Q) { ses.recentT.push(q); ses.recentTy.push(Q.type); return Q; }
     }
@@ -496,7 +566,7 @@
 
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
-    examStatus, pendingNew, poolLoad, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
+    examStatus, pendingNew, poolLoad, BETA, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
     stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak, pairDiff,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },

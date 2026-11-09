@@ -51,7 +51,7 @@
   const acctLabel = () => window.Sync && Sync.user ? esc(Sync.user.email || 'Аккаунт') : 'Войти / регистрация';
   const gear = () => `<button class="iconbtn" onclick="App.menu()" aria-label="Меню">⚙</button>`;
   // на телефоне остаются название, вход и шестерёнка, остальное — в меню
-  const nav = () => `<nav><a class="brand" onclick="App.home()">Насмотренность</a>
+  const nav = () => `<nav><a class="brand" onclick="App.home()">Насмотренность${E.BETA ? ' <span class="beta">тест</span>' : ''}</a>
     <span class="links"><a onclick="App.progress()">Прогресс</a><a onclick="App.gallery()">Галерея</a><a onclick="App.settings()">Настройки</a></span>
     <span class="sp"></span><a class="acct" onclick="App.account()">${window.Sync && Sync.user ? acctLabel() : 'Войти'}</a>${gear()}</nav>`;
   // верхняя строка экранов занятия: выход, прогресс, меню
