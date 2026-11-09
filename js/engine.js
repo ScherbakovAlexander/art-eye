@@ -105,8 +105,8 @@
     const s = st(q); if (!s) return LEVELS[0];
     const r = s.recent || [], acc = n => r.slice(-n).reduce((a, b) => a + b, 0) / Math.max(1, r.slice(-n).length);
     if (s.n < 3) return LEVELS[1];
-    if (s.stab < 2 || (r.length >= 5 && acc(5) < 0.6)) return LEVELS[2];
-    if (s.stab < 14) return LEVELS[3];
+    if (s.stab < 1 || (r.length >= 5 && acc(5) < 0.6)) return LEVELS[2];
+    if (s.stab < 7) return LEVELS[3];
     if (s.stab < 30) return LEVELS[4];
     if (s.stab >= 90 && r.length >= 10 && acc(10) >= 0.9) return LEVELS[6];
     return LEVELS[5];
