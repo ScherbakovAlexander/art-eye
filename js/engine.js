@@ -125,7 +125,7 @@
   }
   // уровни на тестовом стенде — по доказательствам, а не по календарю:
   // знаю — 5 верных подряд в 2 разных днях (или узнал сам, без ошибок с тех пор);
-  // освоен — 10 верных подряд в 3 разных днях, с перерывом хотя бы 3 дня; эксперт — ещё и 10 верных на трудных вопросах
+  // освоен — 10 верных подряд в 3 разных днях, с перерывом хотя бы 2 дня; эксперт — ещё и 10 верных на трудных вопросах
   const LEVELS = [
     { k: 0, name: 'закрыт', icon: '🔒' }, { k: 1, name: 'новый', icon: '🌱' }, { k: 2, name: 'учу', icon: '✏️' },
     { k: 3, name: 'повторяю', icon: '🔁' }, { k: 4, name: 'знаю', icon: '✅' }, { k: 5, name: 'освоен', icon: '🏅' }, { k: 6, name: 'эксперт', icon: '👑' }];
@@ -133,7 +133,7 @@
     const s = st(q); if (!s) return LEVELS[0];
     const r = s.recent || [], acc = n => r.slice(-n).reduce((a, b) => a + b, 0) / Math.max(1, r.slice(-n).length);
     const streak = s.streak || 0, days = (s.sDays || []).length;
-    const master = streak >= 10 && days >= 3 && (s.sGap || 0) >= 3;
+    const master = streak >= 10 && days >= 3 && (s.sGap || 0) >= 2;
     if (master) return (s.hardOk || 0) >= 10 ? LEVELS[6] : LEVELS[5];
     if (streak >= 5 && days >= 2) return LEVELS[4];
     if (s.n < 3) return LEVELS[1];
