@@ -197,8 +197,8 @@
     const news = start
       ? `<p class="announce">✨ ${E.known().length ? `Начнём со знакомства с ${start > 1 ? `${start} новыми художниками` : 'новым художником'}` : 'Начнём со знакомства с первыми художниками'}</p>` : '';
     return `<div class="card">
-        <h3>Занятие ${num}</h3>
-        <p class="muted">${p.len} вопросов</p>
+        <h3>Занятие ${num}${p.theme ? ` · ${p.theme.n}` : ''}</h3>
+        <p class="muted">${p.theme ? `${p.theme.d} · ` : ''}${p.len} вопросов</p>
         ${news}
         <button class="primary" onclick="App.session()">Начать</button>
       </div>`;
@@ -374,7 +374,7 @@
   }
 
   function sessionEnd() {
-    E.endSession();
+    E.endSession(ses);
     if (window.Sync && Sync.flush) Sync.flush();   // прогресс уходит на сервер раз за занятие
     const learned = ses.newIds.map(n => A[n.q].n);
     render(`${nav()}<div class="card center">

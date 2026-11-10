@@ -368,9 +368,12 @@
   function build(q, type, opt = {}) {
     const a = A[q], uo = !!opt.exam;
     const k = known();
+    // тематические подсказки: vs — художник, с которым надо различать; among — варианты только из этих художников
+    const pool = opt.among && opt.among.length >= 4 ? opt.among : k;
+    const dis = (n, t) => { const d = distractors(q, n, t, pool); return opt.vs ? [opt.vs, ...d.filter(x => x !== opt.vs)].slice(0, n) : d; };
     if (type === 'who') {
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
-      const ds = distractors(q, Math.min(nOpts(type) - 1, k.length - 1), type);
+      const ds = dis(Math.min(nOpts(type) - 1, pool.length - 1), type);
       const hard = ds.some(d => (pairDiff(q, d) || 0) >= 0.75);   // среди вариантов — очень похожий художник
       return { type, q, prompt: 'Кто автор?', paintings: [p], options: shuffle([q, ...ds]).map(x => ({ v: x, label: A[x].n })), correct: q, hard };
     }
@@ -414,12 +417,12 @@
     }
     if (type === 'find') {
       const p = pickPainting(q, { unseenOnly: uo }); if (!p) return null;
-      const ds = distractors(q, 3, type);
+      const ds = dis(3, type);
       const ps = shuffle([p, ...ds.map(d => pickPainting(d, { unseenOnly: uo }))].filter(Boolean));
       return { type, q, prompt: `Где работа: ${a.n}?`, paintings: ps, options: ps.map(x => ({ v: x.id })), correct: p.id, grid: true };
     }
     if (type === 'odd') {
-      const [b] = distractors(q, 1, type);
+      const [b] = dis(1, type);
       const ex = [];
       const same = [0, 1, 2].map(() => { const p = pickPainting(q, { exclude: ex, unseenOnly: uo }); if (p) ex.push(p.id); return p; }).filter(Boolean);
       const odd = pickPainting(b, { unseenOnly: uo });
@@ -430,7 +433,7 @@
     if (type === 'pair') {
       const sameArtist = Math.random() < 0.5;
       const p1 = pickPainting(q, { unseenOnly: uo });
-      const b = sameArtist ? q : distractors(q, 1, type)[0];
+      const b = sameArtist ? q : dis(1, type)[0];
       const p2 = p1 && pickPainting(b, { exclude: [p1.id], unseenOnly: uo });
       if (!p2) return build(q, 'who', opt);
       return { type, q, b, prompt: 'Это один и тот же художник?', paintings: [p1, p2], options: [{ v: 'yes', label: 'Да, один' }, { v: 'no', label: 'Нет, разные' }], correct: sameArtist ? 'yes' : 'no', pairView: true };
@@ -483,12 +486,13 @@
   function planSession(ses) {
     const k = known(), r = introReason();
     ses.len = PLAN_LEN;
+    const theme = ses.theme = pickTheme(k);
     // сколько новых: пока нагрузка ниже ёмкости (+1 — за занятие верные ответы её снижают,
     // это место и достаётся «сюрпризу» в середине); на разгоне больше
     const intros = [];
     if (r.ok) {
       const left = k.length >= WARMUP ? S.settings.newPerDay - S.day.intro : Infinity;
-      const max = Math.min(k.length < WARMUP ? 4 : 2, left);
+      const max = Math.min(theme ? 1 : k.length < WARMUP ? 4 : 2, left);
       let load = r.load;
       while (intros.length < max && (load < r.cap + 1 || k.length + intros.length < 3)) {
         const q = nextNew(intros.map(x => x.q)); if (!q) break;
@@ -517,6 +521,17 @@
       }
       if (full) break;
     }
+    // тематическое занятие: до 8 свободных мест — художники темы (давно не виденные, похожие, одной страны…)
+    ses.themeSlots = {};
+    if (theme) {
+      const free = shuffle([...Array(PLAN_LEN).keys()].filter(i => !plan[i])).slice(0, Math.min(THEME_SLOTS, 2 * theme.pool.length)).sort((a, b) => a - b);
+      for (const i of free) {
+        let cand = theme.pool.filter(([q]) => !near(i, q));
+        if (!cand.length) cand = theme.pool;
+        plan[i] = weighted(cand.map(c => c[0]), cand.map(c => c[1] * (0.5 + priority(c[0]))));
+        ses.themeSlots[i] = true;
+      }
+    }
     // остальные места: жребий среди всех знакомых (+ те новые, что к этому месту уже показаны)
     for (let i = 0; i < PLAN_LEN; i++) {
       if (plan[i]) continue;
@@ -526,6 +541,93 @@
       plan[i] = cand.length ? weighted(cand.map(c => c[0]), cand.map(c => c[1])) : null;
     }
     ses.plan = plan; ses.intros = intros;
+  }
+  // ---------- тестовый стенд: тематические занятия ----------
+  // Примерно раз в 4–5 занятий планировщик делает занятие тематическим — если для темы есть материал
+  // и повод. Тема занимает до 8 из 12 мест (те, что не нужны новым художникам), остальное — как обычно.
+  // Новых художников в таком занятии не больше одного. Вопросы обычных типов, но подобраны под тему.
+  const country = q => { const c = A[q].c.split(' /')[0].replace(/ \(.*\)/, ''); return c === 'Фландрия' ? 'Нидерланды' : c; };
+  const SCHOOL = { 'Россия': 'Русские художники', 'Франция': 'Французские художники', 'Италия': 'Итальянские мастера',
+    'Нидерланды': 'Голландцы и фламандцы', 'Испания': 'Испанские художники', 'Германия': 'Немецкие художники', 'Англия': 'Английские художники' };
+  const daysSince = q => st(q).lastAns ? (now() - st(q).lastAns) / DAY : 99;
+  const knowsWell = q => levelBeta(q).k >= 4;
+  const partners = (q, k) => k.filter(c => c !== q && ((pairDiff(q, c) || 0) >= 0.7 || (S.conf[q + '|' + c] || 0) + (S.conf[c + '|' + q] || 0) > 0));
+  const typeAcc = ts => { const r = ts.flatMap(t => skill(t).recent); return r.length < 8 ? null : r.reduce((a, b) => a + b, 0) / r.length; };
+  // ready() → null (нет материала или повода) или { pool: [[художник, вес]], types: { тип: вес }, … }
+  const THEMES = {
+    review: {
+      n: 'Повторим знакомых', d: 'Художники, которых вы давно не встречали',
+      ready(k) {
+        const well = k.filter(knowsWell);
+        if (k.length < 8 || well.length < 5) return null;
+        const old = well.filter(q => daysSince(q) >= 2);
+        if (old.length < 5) return null;
+        return { pool: old.map(q => [q, 1 + daysSince(q)]), types: { who: 5, find: 1.5, odd: 1.5 } };
+      }
+    },
+    similar: {
+      n: 'Различаем похожих', d: 'Художники, которых легко спутать',
+      ready(k) {
+        if (k.length < 12) return null;
+        const pairs = new Set();
+        for (const q of k) for (const c of partners(q, k)) pairs.add([q, c].sort().join('|'));
+        if (pairs.size < 3) return null;
+        const pool = k.filter(q => partners(q, k).length);
+        return { pool: pool.map(q => [q, 1]), types: { who: 4, odd: 2, pair: 2, find: 1.5 }, vs: q => { const p = partners(q, k); return p[rnd(p.length)]; } };
+      }
+    },
+    styles: {
+      n: 'Пройдёмся по стилям', d: 'Узнаём направление по картине',
+      ready(k) {
+        const by = {}; k.forEach(q => { by[A[q].m] = (by[A[q].m] || 0) + 1; });
+        if (Object.keys(by).length < 5 || Object.values(by).filter(n => n >= 2).length < 3) return null;
+        const acc = typeAcc(['movement', 'findMov']);
+        if (acc != null && acc >= 0.85) return null;
+        return { pool: k.map(q => [q, by[A[q].m] >= 2 ? 1.5 : 1]), types: { movement: 3, findMov: 2 } };
+      }
+    },
+    dates: {
+      n: 'Выучим даты', d: 'Когда написаны картины',
+      ready(k) {
+        const dated = k.filter(q => A[q].p.some(p => p.y));
+        const ys = dated.map(q => A[q].mid);
+        if (dated.length < 10 || Math.max(...ys) - Math.min(...ys) < 200) return null;
+        const acc = typeAcc(['era', 'older']);
+        if (acc != null && acc >= 0.75) return null;
+        return { pool: dated.map(q => [q, 1]), types: { era: 1, older: 1 } };
+      }
+    },
+    school: {
+      ready(k) {
+        const by = {}; k.forEach(q => { const c = country(q); if (SCHOOL[c]) (by[c] = by[c] || []).push(q); });
+        const ok = Object.keys(by).filter(c => by[c].length >= 5);
+        if (!ok.length || Math.random() > 0.4) return null;    // редкая тема
+        const c = ok[rnd(ok.length)];
+        return { n: SCHOOL[c], d: 'Художники одной страны', pool: by[c].map(q => [q, 1]), types: { who: 4, find: 1.5, odd: 1.5 }, among: by[c] };
+      }
+    }
+  };
+  const THEME_EVERY = 4, THEME_SLOTS = 8;
+  function pickTheme(k) {
+    if (k.length < WARMUP) return null;
+    const n = S.sessions || 0, since = n - (S.themeAt == null ? -99 : S.themeAt);
+    // раз в 4–5 занятий: после 4 обычных — с вероятностью 1/2, после 5 — наверняка
+    if (since < THEME_EVERY || (since === THEME_EVERY && Math.random() < 0.5)) return null;
+    // из готовых тем — та, что была давно (или ещё не была)
+    const used = S.themesUsed || {};
+    const ready = [];
+    for (const key of shuffle(Object.keys(THEMES))) { const r = THEMES[key].ready(k); if (r) ready.push({ key, r }); }
+    ready.sort((a, b) => (used[a.key] ?? -99) - (used[b.key] ?? -99));
+    if (!ready.length) return null;
+    const t = ready[0], base = THEMES[t.key];
+    return { key: t.key, n: t.r.n || base.n, d: t.r.d || base.d, pool: t.r.pool, types: t.r.types, vs: t.r.vs, among: t.r.among };
+  }
+  // тип вопроса на тематическом месте: из типов темы, доступных сейчас; только что бывший — реже
+  function themeType(th, recentTypes) {
+    const av = availableTypes(), ts = Object.keys(th.types).filter(t => av.includes(t));
+    if (!ts.length) return 'who';
+    const last = recentTypes[recentTypes.length - 1];
+    return weighted(ts, ts.map(t => th.types[t] * (t === last ? 0.5 : 1)));
   }
   // запланированный новый художник для этого места
   function plannedNew(ses) {
@@ -551,7 +653,10 @@
   function nextQuestion(ses) {
     for (let tries = 0; tries < 5; tries++) {
       const q = nextTarget(ses, tries >= 2);   // если по плану вопрос не собрался — берём другого художника
-      const Q = build(q, chooseType(q, false, ses.recentTy));
+      const th = BETA && ses.theme && ses.themeSlots[ses.i] && tries < 2 ? ses.theme : null;
+      const Q = th ? build(q, themeType(th, ses.recentTy), { vs: th.vs && th.vs(q), among: th.among })
+        : build(q, chooseType(q, false, ses.recentTy));
+      if (Q && th) Q.theme = th.key;
       if (Q) { ses.recentT.push(q); ses.recentTy.push(Q.type); return Q; }
     }
     return null;
@@ -562,8 +667,9 @@
     const r = ses.res[Q.q] = ses.res[Q.q] || { n: 0, ok: 0 }; r.n++; if (ok) r.ok++;
     if (!ok) ses.retry.push({ q: Q.q, at: ses.i + 3 });
   }
-  function endSession() {
+  function endSession(ses = null) {
     if (S.gate.failedAt) S.gate.sessionsSinceFail++;
+    if (ses && ses.theme) { S.themeAt = S.sessions || 0; (S.themesUsed = S.themesUsed || {})[ses.theme.key] = S.themeAt; }
     S.sessions = (S.sessions || 0) + 1;
     save();
   }
