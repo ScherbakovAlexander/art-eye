@@ -333,7 +333,7 @@
   // label — для статистики; w — вес в обычном занятии (чаще всего «кто автор»), we — в экзамене.
   // Стенд: «кто автор» — около половины вопросов, и его доля не падает, даже когда он даётся легко.
   const TYPES = {
-    who: { label: 'Кто автор', min: 2, w: BETA ? 9 : 5, we: 6 },
+    who: { label: 'Кто автор', min: 2, w: BETA ? 11 : 5, we: 6 },
     find: { label: 'Найти картину художника', min: 4, w: 2, we: 2 },
     movement: { label: 'Стиль картины (направление)', min: 4, movs: 2, w: 1.8, we: 1.5 },
     findMov: { label: 'Найти картину направления', min: 5, movs: 4, w: 1, we: 0.8 },
@@ -350,7 +350,7 @@
     const av = availableTypes();
     const s = st(q);
     // первый вопрос о свежем художнике — «кто автор», чтобы закрепить связь картина→имя
-    if (!exam && s && s.n < 1) return 'who';
+    if (!exam && s && s.n < (BETA ? 3 : 1)) return 'who';
     // при низкой общей точности сложные форматы реже
     const easy = !exam && pace().mode === 'easy';
     // против однообразия: тип, который только что был, — реже (два «кто автор» подряд допустимы)
@@ -360,7 +360,7 @@
       if (easy && t !== 'who' && t !== 'movement') w *= 0.4;
       // трудные для вас типы — чаще, лёгкие — реже (на стенде «кто автор» не реже)
       if (!exam && !(BETA && t === 'who')) w *= 1.4 - 0.8 * skill(t).d;
-      if (last[1] === t) w *= t === 'who' && last[0] !== t ? 0.5 : 0.2;
+      if (last[1] === t && !(BETA && t === 'who')) w *= t === 'who' && last[0] !== t ? 0.5 : 0.2;
       return w || 0.0001;
     }));
   }
@@ -490,9 +490,11 @@
     // сколько новых: пока нагрузка ниже ёмкости (+1 — за занятие верные ответы её снижают,
     // это место и достаётся «сюрпризу» в середине); на разгоне больше
     const intros = [];
-    if (r.ok) {
+    // новый — только когда все недавние «новые» (меньше 3 ответов) хотя бы раз угаданы
+    const shaky = k.filter(q => st(q).n < 3 && !st(q).ok).length;
+    if (r.ok && (!shaky || k.length < 3)) {
       const left = k.length >= WARMUP ? S.settings.newPerDay - S.day.intro : Infinity;
-      const max = Math.min(theme ? 1 : k.length < WARMUP ? 4 : 2, left);
+      const max = Math.min(theme ? 1 : 2, left);
       let load = r.load;
       while (intros.length < max && (load < r.cap + 1 || k.length + intros.length < 3)) {
         const q = nextNew(intros.map(x => x.q)); if (!q) break;
@@ -607,9 +609,9 @@
       }
     }
   };
-  const THEME_EVERY = 4, THEME_SLOTS = 8;
+  const THEME_EVERY = 4, THEME_SLOTS = 8, THEME_MIN = 15;   // темы — со второго дня занятий и от 15 знакомых
   function pickTheme(k) {
-    if (k.length < WARMUP) return null;
+    if (k.length < THEME_MIN || Object.keys(S.days).length < 2) return null;
     const n = S.sessions || 0, since = n - (S.themeAt == null ? -99 : S.themeAt);
     // раз в 4–5 занятий: после 4 обычных — с вероятностью 1/2, после 5 — наверняка
     if (since < THEME_EVERY || (since === THEME_EVERY && Math.random() < 0.5)) return null;
