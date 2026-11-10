@@ -236,41 +236,6 @@
   }
   // новый художник вводится прямо по ходу занятия, когда пул освободился
   function startIntro(q) {
-    if (E.wantPrecheck(q)) return precheck(q, 0, []);
-    introNow(q);
-  }
-  // стенд: «Узнаёте автора?» — 2 картины без подсказок. Оба раза верно — художник уже знаком, учить не надо.
-  function precheck(q, j, used) {
-    const P = E.precheckQuestion(q, used);
-    if (!P) return introNow(q);
-    P.paintings.forEach(E.markSeen); E.save();
-    drawQuestion(P, { progress: ses.i / ses.len, onPick: v => {
-      const ok = v === P.correct;
-      document.querySelectorAll('[data-v]').forEach(b => b.classList.add(b.dataset.v === q ? 'right' : b.dataset.v === v ? 'wrong' : 'dim'));
-      const fb = document.getElementById('fb'); fb.style.minHeight = fb.offsetHeight + 'px';
-      const msg = ok ? (j === 0 ? '✓ Верно! Ещё одна картина' : '✓ Верно! Вы его уже знаете') : `Это <b>${A[q].n}</b> — давайте познакомимся`;
-      fb.innerHTML = `<div class="feedback ${ok ? 'ok' : 'bad'}"><div class="fhead"><div class="verdict">${msg}</div>
-        <button class="primary next" onclick="App._cont()">Дальше ›</button></div><div class="fbody"></div></div>`;
-      App._cont = () => ok ? (j === 0 ? precheck(q, 1, used.concat(P.paintings[0].id)) : recognized(q)) : introNow(q);
-      onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); App._cont(); } };
-    } });
-  }
-  function recognized(q) {
-    E.introduce(q, ses, { pre: true }); nextQ = null;
-    const a = A[q];
-    render(`<div class="stage">${topRow()}
-        <div class="scroll center">
-          <div class="kicker">Новый художник</div>
-          <div class="head">${portrait(q)}<div><h2>${a.n}</h2><div class="muted small">${a.y} · ${a.c} · ${M[a.m].n}</div></div></div>
-          <p class="announce">🎉 Вы его уже знаете — сразу уровень ✅ «знаю»</p>
-          <div class="traits"><h4>Что замечать</h4>${a.s.map(x => `<span>${x}</span>`).join('')}</div>
-        </div>
-        <div class="navrow"><button onclick="App._look()">Посмотреть картины</button><button class="primary" onclick="App._cont()">Дальше ›</button></div></div>`,
-      e => { if (e.key === 'Enter') quizStep(); }, true);
-    App._cont = quizStep;
-    App._look = () => intro(q);
-  }
-  function introNow(q) {
     const movFirst = !E.S.movSeen[A[q].m];
     E.introduce(q, ses); nextQ = null;
     if (movFirst) movementCard(A[q].m, () => intro(q)); else intro(q);

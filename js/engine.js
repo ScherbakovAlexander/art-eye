@@ -86,23 +86,11 @@
   // ---------- интервальные повторения (на уровне художника) ----------
   // stab — «стабильность» в днях: через сколько пора повторить. Верный ответ растит её тем сильнее,
   // чем дольше прошло с прошлого раза (повтор раньше срока почти ничего не даёт), ошибка — резко режет.
-  // «Узнаёте сами?» (стенд): перед знакомством — картина нового художника без подсказок.
-  // Варианты из всех художников, в том числе незнакомых, — методом исключения не угадать.
-  // Спрашиваем про самых известных (ярус 1) или если точность высокая: остальных дети почти никогда не знают.
-  const wantPrecheck = q => BETA && (A[q].t === 1 || (recentAccuracy() || 0) >= 0.85);
-  function precheckQuestion(q, exclude = []) {
-    const p = pickPainting(q, { exclude, unseenOnly: true }); if (!p) return null;
-    const others = ORDER.filter(x => x !== q);
-    const ds = weightedSample(others, others.map(x => 0.3 + 3 * (pairDiff(q, x) || 0.3) ** 2), 3);
-    return { type: 'who', q, prompt: 'Новый художник! Узнаёте автора?', paintings: [p], options: shuffle([q, ...ds]).map(x => ({ v: x, label: A[x].n })), correct: q, pre: true };
-  }
-  function introduce(q, ses = null, { pre = false } = {}) {
+  function introduce(q, ses = null) {
     rollDay();
     // художники разгона не тратят дневной лимит
     if (known().length >= WARMUP) S.day.intro++;
     S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [], w: 1, streak: 0, sDays: [], sGap: 0 };
-    // узнал сам (2 из 2 без подсказок) — сразу «знаю»: длинный интервал, почти не «в работе»
-    if (pre) Object.assign(S.artists[q], { stab: 7, due: now() + 7 * DAY, w: 0.1, n: 2, ok: 2, recent: [1, 1], streak: 2, sDays: [today()], lastAns: now(), pre: 1 });
     if (ses) { ses.newIds.push({ q, at: ses.i }); ses.lastIntro = ses.i; if (!ses.plan) ses.len = Math.min(ses.len + 2, S.settings.sessionLen + 6); }
     S.movSeen[A[q].m] = S.movSeen[A[q].m] || now();
     S.gate.sinceExam++;
@@ -127,7 +115,7 @@
   // Учитываются только вопросы, где надо узнать именно художника (кто автор, найти, лишняя, один ли).
   function evidence(q, ok, hard) {
     const s = st(q); if (!s) return;
-    if (!ok) { s.streak = 0; s.sDays = []; s.sGap = 0; s.pre = 0; s.lastAns = now(); return; }
+    if (!ok) { s.streak = 0; s.sDays = []; s.sGap = 0; s.lastAns = now(); return; }
     const d = today();
     if (s.streak && s.lastAns) s.sGap = Math.max(s.sGap || 0, (now() - s.lastAns) / DAY);
     s.streak = (s.streak || 0) + 1;
@@ -147,7 +135,7 @@
     const streak = s.streak || 0, days = (s.sDays || []).length;
     const master = streak >= 10 && days >= 3 && (s.sGap || 0) >= 3;
     if (master) return (s.hardOk || 0) >= 10 ? LEVELS[6] : LEVELS[5];
-    if ((streak >= 5 && days >= 2) || s.pre) return LEVELS[4];
+    if (streak >= 5 && days >= 2) return LEVELS[4];
     if (s.n < 3) return LEVELS[1];
     if (r.length >= 5 && acc(5) < 0.6) return LEVELS[2];
     return LEVELS[3];
@@ -630,7 +618,7 @@
 
   window.Engine = {
     A, ORDER, get S() { return S; }, save, known, st, level, dueList, introReason, nextNew, introduce, introGallery,
-    examStatus, pendingNew, poolLoad, BETA, LEVELS, wantPrecheck, precheckQuestion, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
+    examStatus, pendingNew, poolLoad, BETA, LEVELS, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
     stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak, pairDiff,
     set onSave(fn) { onSave = fn; },
     reset() { S = fresh(); save(); },
