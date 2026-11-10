@@ -187,26 +187,18 @@
       ${examCard}`, e => { if (e.key === 'Enter') App.session(); });
   }
 
-  // стенд: номер и состав занятия. Новый художник в начале — анонс; «сюрприз» в середине не выдаём.
+  // стенд: номер занятия и число вопросов; состав не раскрываем. Новый художник в начале — анонс,
+  // «сюрприз» в середине не выдаём.
   function sessionCard() {
     // план устарел, если с тех пор изменился прогресс (вход в аккаунт, загрузка файла)
     if (!planned || planned.start.known !== E.known().length || planned.sesNo !== E.S.sessions) { planned = E.newSession(); planned.sesNo = E.S.sessions; }
     const p = planned, num = (E.S.sessions || 0) + 1;
-    const start = p.intros.filter(x => x.at === 0).map(x => x.q);
-    const later = new Set(p.intros.filter(x => x.at > 0).map(x => x.q));
-    const counts = {};
-    for (const q of new Set(p.plan)) {
-      if (!q || later.has(q)) continue;
-      const k = start.includes(q) ? 1 : E.level(q).k;
-      counts[k] = (counts[k] || 0) + 1;
-    }
-    const lv = E.LEVELS.filter(l => counts[l.k]).map(l => `<span class="lvchip lv${l.k}">${l.icon} ${counts[l.k]} ${lvWord(l, counts[l.k])}</span>`).join('');
-    const news = start.length
-      ? `<p class="announce">✨ ${E.known().length ? `Сегодня знакомство с ${start.length > 1 ? `${start.length} новыми художниками` : 'новым художником'}` : 'Знакомство с первыми художниками'}</p>` : '';
+    const start = p.intros.filter(x => x.at === 0).length;
+    const news = start
+      ? `<p class="announce">✨ ${E.known().length ? `Начнём со знакомства с ${start > 1 ? `${start} новыми художниками` : 'новым художником'}` : 'Начнём со знакомства с первыми художниками'}</p>` : '';
     return `<div class="card">
         <h3>Занятие ${num}</h3>
-        <p class="muted">${p.len} вопросов${lv ? ' · художники:' : ''}</p>
-        ${lv ? `<div class="lvchips">${lv}</div>` : ''}
+        <p class="muted">${p.len} вопросов</p>
         ${news}
         <button class="primary" onclick="App.session()">Начать</button>
       </div>`;
