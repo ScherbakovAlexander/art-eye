@@ -198,9 +198,12 @@
   // Нагрузка пула = сумма весов (художник, которому пора на повторение, весит минимум 0.1).
   // Когда нагрузка меньше ёмкости — вводится новый художник, прямо по ходу занятия.
   const TYPE_K = { who: 1, find: 0.8, odd: 0.8, pair: 0.6, movement: 0.4, findMov: 0.3, era: 0, older: 0 };
+  // Стенд: вес падает медленнее (×0.75 вместо ×0.6) — художник дольше «в работе» и чаще попадается,
+  // а новые вводятся реже: примерно один на 1,5–2 занятия вместо одного на занятие.
+  const DECAY = BETA ? 0.25 : 0.4;
   function trainWeight(q, ok, k) {
     const s = st(q); if (!s || !k) return;
-    s.w = ok ? s.w * (1 - 0.4 * k) : Math.min(1.2, s.w + 0.25 * k);
+    s.w = ok ? s.w * (1 - DECAY * k) : Math.min(1.2, s.w + 0.25 * k);
   }
   const isDue = q => st(q).due <= now();
   const poolLoad = () => known().reduce((sum, q) => sum + Math.max(st(q).w, isDue(q) ? 0.1 : 0), 0);
