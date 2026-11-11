@@ -490,7 +490,7 @@
   // и время от времени попадается. Чем больше знакомых, тем больше вопросов уходит на них —
   // поэтому, вместе с KNOWN_LOAD, новые к концу появляются реже.
   // Ошибки план не меняют: они сдвигают выученность (вес, стабильность) и скажутся на следующих занятиях.
-  const PLAN_LEN = 12, NEW_SLOTS = 3;
+  const PLAN_LEN = 12, NEW_SLOTS = 2;   // вопросов о новом художнике в занятии знакомства
   const priority = q => st(q).w + 0.04 + (isDue(q) ? 0.35 : 0);
   function planSession(ses) {
     const k = known(), r = introReason();
@@ -515,7 +515,7 @@
     const atStart = Math.min(intros.length, Math.max(1, 3 - k.length));
     let pos = 3 + rnd(2);
     intros.forEach((x, j) => { x.at = j < atStart ? 0 : pos; if (j >= atStart) pos += 3 + rnd(2); });
-    // кто не помещается (нужно место на 3 вопроса не подряд) — в следующее занятие
+    // кто не помещается (нужно место на его вопросы не подряд) — в следующее занятие
     for (let j = intros.length - 1; j >= 0; j--) if (intros[j].at > PLAN_LEN - NEW_SLOTS * 2 + 1) intros.splice(j, 1);
     let plan;
     const near = (i, q) => plan[i - 1] === q || plan[i + 1] === q;
@@ -543,7 +543,7 @@
         ses.themeSlots[i] = true;
       }
     }
-    // остальные места: жребий среди всех знакомых. Новым хватает их трёх мест;
+    // остальные места: жребий среди всех знакомых. Новым хватает их собственных мест (NEW_SLOTS);
     // только пока знакомых меньше трёх — и новые (те, что к этому месту уже показаны)
     for (let i = 0; i < PLAN_LEN; i++) {
       if (plan[i]) continue;
