@@ -2,6 +2,8 @@
 (function () {
   const E = window.Engine, A = E.A, M = window.MOVEMENTS;
   if (E.BETA) document.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });  // стенд: картины не перетаскиваются
+  // картины направления — без обрезки: ширина каждой пропорциональна её формату, высота у всех одна
+  document.addEventListener('load', e => { const t = e.target; if (t.tagName === 'IMG' && t.parentNode.parentNode?.classList?.contains('mvpics')) t.parentNode.style.flexGrow = t.naturalWidth / t.naturalHeight; }, true);
   const $app = document.getElementById('app');
   let onKey = null;
   document.addEventListener('keydown', e => { if (onKey && !e.ctrlKey && !e.metaKey && !e.altKey) onKey(e); });
