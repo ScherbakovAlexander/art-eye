@@ -503,7 +503,8 @@
     const shaky = k.filter(q => st(q).n < 3 && !st(q).ok).length;
     if (r.ok && (!shaky || k.length < 3)) {
       const left = k.length >= WARMUP ? S.settings.newPerDay - S.day.intro : Infinity;
-      const max = Math.min(theme ? 1 : 2, left);
+      // в первом занятии — сразу трое (с двумя художниками занятие однообразное), потом — до двух
+      const max = Math.min(Math.max(theme ? 1 : 2, 3 - k.length), left);
       let load = r.load;
       while (intros.length < max && (load < r.cap + 1 || k.length + intros.length < 3)) {
         const q = nextNew(intros.map(x => x.q)); if (!q) break;
