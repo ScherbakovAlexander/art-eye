@@ -3,7 +3,7 @@
 // поэтому выучить конкретное полотно бесполезно — приходится схватывать почерк.
 
 (function () {
-  const BETA = !!window.BETA;   // тестовый стенд (beta/): свой прогресс и занятие, спланированное заранее
+  const BETA = !!window.BETA;   // тестовый стенд (beta/): свой прогресс (отдельный ключ и поле в аккаунте), логика та же
   const KEY = BETA ? 'arteye.beta' : 'arteye.v1';
   const DAY = 864e5;
   const now = () => Date.now();
@@ -86,7 +86,7 @@
   // ---------- интервальные повторения (на уровне художника) ----------
   // stab — «стабильность» в днях: через сколько пора повторить. Верный ответ растит её тем сильнее,
   // чем дольше прошло с прошлого раза (повтор раньше срока почти ничего не даёт), ошибка — резко режет.
-  // стенд: художники, с которыми познакомились в этом занятии, — чаще среди неверных вариантов,
+  // художники, с которыми познакомились в этом занятии, — чаще среди неверных вариантов,
   // чтобы «свежее имя» не было подсказкой
   let sesNew = new Set();
   function introduce(q, ses = null) {
@@ -127,7 +127,7 @@
     if (hard) s.hardOk = (s.hardOk || 0) + 1;
     s.lastAns = now();
   }
-  // уровни на тестовом стенде — по доказательствам, а не по календарю:
+  // уровни художников — по доказательствам, а не по календарю:
   // знаю — 5 верных подряд в 2 разных днях (или узнал сам, без ошибок с тех пор);
   // освоен — 10 верных подряд в 3 разных днях, с перерывом хотя бы 2 дня; эксперт — ещё и 10 верных на трудных вопросах
   const LEVELS = [
@@ -144,23 +144,13 @@
     if (r.length >= 5 && acc(5) < 0.6) return LEVELS[2];
     return LEVELS[3];
   }
-  function level(q) {
-    if (BETA) return levelBeta(q);
-    const s = st(q); if (!s) return { k: 0, name: 'закрыт' };
-    if (s.stab < 1) return { k: 1, name: 'знакомство' };
-    if (s.stab < 7) return { k: 2, name: 'учу' };
-    if (s.stab < 30) return { k: 3, name: 'знаю' };
-    return { k: 4, name: 'уверенно' };
-  }
+  const level = q => levelBeta(q);
   const dueList = () => known().filter(q => st(q).due <= now()).sort((a, b) => overdue(b) - overdue(a));
   const overdue = q => (now() - st(q).due) / (st(q).stab * DAY);
-  // доля пройденного: каждый художник от 0 до 1 по стабильности (30 дней — освоен), среднее по всем
-  // на стенде — от уровня: новый 5%, учу 15%, повторяю 35%, знаю 70%, освоен и эксперт — 100%
+  // доля пройденного — от уровня: новый 5%, учу 15%, повторяю 35%, знаю 70%, освоен и эксперт — 100%
   const LEVEL_SHARE = [0, 0.05, 0.15, 0.35, 0.7, 1, 1];
   function mastery() {
-    const one = BETA ? q => LEVEL_SHARE[levelBeta(q).k]
-      : q => { const s = st(q); return s ? Math.min(1, Math.log(1 + s.stab) / Math.log(31)) : 0; };
-    return ORDER.reduce((a, q) => a + one(q), 0) / ORDER.length;
+    return ORDER.reduce((a, q) => a + LEVEL_SHARE[levelBeta(q).k], 0) / ORDER.length;
   }
   // серия дней подряд с занятиями (сегодняшний день может быть ещё не начат)
   function dayStreak() {
@@ -207,10 +197,10 @@
     s.w = ok ? s.w * (1 - 0.4 * k) : Math.min(1.2, s.w + 0.25 * k);
   }
   const isDue = q => st(q).due <= now();
-  // Стенд: знакомый художник никогда не уходит совсем и всегда занимает немного места (0.03):
+  // Знакомый художник никогда не уходит совсем и всегда занимает немного места (0.03):
   // чем больше знакомых, тем меньше места новым. При 10 занятиях в день — ~18 новых в первый день,
   // 6–10 в первые дни, к концу 1–2 в день.
-  const KNOWN_LOAD = BETA ? 0.03 : 0;
+  const KNOWN_LOAD = 0.03;
   const poolLoad = () => known().reduce((sum, q) => sum + Math.max(st(q).w, isDue(q) ? 0.1 : 0, KNOWN_LOAD), 0);
   // ёмкость зависит от точности: отвечаете хорошо — в работе больше художников, плохо — меньше
   function capacity() {
@@ -273,7 +263,7 @@
   // новый художник для этого места занятия: пул не заполнен, в занятии хватает вопросов,
   // чтобы его закрепить, и с прошлого знакомства прошло хотя бы 3 вопроса
   function pendingNew(ses) {
-    if (BETA && ses.plan) return plannedNew(ses);
+    if (ses.plan) return plannedNew(ses);
     if (!introReason().ok) return null;
     if (ses.i > 0 && (ses.len - ses.i < 5 || ses.i - ses.lastIntro < 3)) return null;
     if (ses.newIds.length >= (known().length < WARMUP ? 6 : 4)) return null;
@@ -328,7 +318,7 @@
       const sim = pd != null ? pd : o.m === t.m ? 1 : 0.75 * Math.exp(-Math.abs(o.mid - t.mid) / 50);
       const conf = (S.conf[q + '|' + c] || 0) + (S.conf[c + '|' + q] || 0);
       // варианты — из пар, близких к целевой трудности; художники, которых уже путали, — чаще
-      return Math.exp(-(((sim - T) / 0.15) ** 2)) + 0.03 + 3 * Math.min(conf, 4) + (BETA && sesNew.has(c) ? 1 : 0);
+      return Math.exp(-(((sim - T) / 0.15) ** 2)) + 0.03 + 3 * Math.min(conf, 4) + (sesNew.has(c) ? 1 : 0);
     });
     return weightedSample(cand, w, n);
   }
@@ -337,7 +327,7 @@
   // label — для статистики; w — вес в обычном занятии (чаще всего «кто автор»), we — в экзамене.
   // Стенд: «кто автор» — около половины вопросов, и его доля не падает, даже когда он даётся легко.
   const TYPES = {
-    who: { label: 'Кто автор', min: 2, w: BETA ? 11 : 5, we: 6 },
+    who: { label: 'Кто автор', min: 2, w: 11, we: 6 },
     find: { label: 'Найти картину художника', min: 4, w: 2, we: 2 },
     movement: { label: 'Стиль картины (направление)', min: 4, movs: 2, w: 1.8, we: 1.5 },
     findMov: { label: 'Найти картину направления', min: 5, movs: 4, w: 1, we: 0.8 },
@@ -353,10 +343,9 @@
   function chooseType(q, exam, recentTypes = []) {
     const av = availableTypes();
     const s = st(q);
-    // первый вопрос о свежем художнике — «кто автор», чтобы закрепить связь картина→имя
-    // стенд: первые три — «кто автор», потом «найдите его картину» (узнать манеру, а не угадать новое имя), потом любой из двух
-    if (!exam && s && s.n < (BETA ? 3 : 1)) {
-      if (!BETA || s.n === 0 || !av.includes('find')) return 'who';
+    // свежий художник: первые три — «кто автор», потом «найдите его картину» (узнать манеру, а не угадать новое имя), потом любой из двух
+    if (!exam && s && s.n < 3) {
+      if (s.n === 0 || !av.includes('find')) return 'who';
       return s.n === 1 || Math.random() < 0.5 ? 'find' : 'who';
     }
     // при низкой общей точности сложные форматы реже
@@ -366,9 +355,9 @@
     return weighted(av, av.map(t => {
       let w = exam ? TYPES[t].we : TYPES[t].w;
       if (easy && t !== 'who' && t !== 'movement') w *= 0.4;
-      // трудные для вас типы — чаще, лёгкие — реже (на стенде «кто автор» не реже)
-      if (!exam && !(BETA && t === 'who')) w *= 1.4 - 0.8 * skill(t).d;
-      if (last[1] === t && !(BETA && t === 'who')) w *= t === 'who' && last[0] !== t ? 0.5 : 0.2;
+      // трудные для вас типы — чаще, лёгкие — реже («кто автор» не реже)
+      if (!exam && t !== 'who') w *= 1.4 - 0.8 * skill(t).d;
+      if (last[1] === t && t !== 'who') w *= t === 'who' && last[0] !== t ? 0.5 : 0.2;
       return w || 0.0001;
     }));
   }
@@ -478,11 +467,11 @@
   function newSession() {
     sesNew = new Set();
     const ses = { newIds: [], res: {}, start: { mastery: mastery(), seen: Object.keys(S.seen).length, known: known().length }, i: 0, len: S.settings.sessionLen, lastIntro: -99, retry: [], recentT: [], recentTy: [], ok: 0, done: 0 };
-    if (BETA) planSession(ses);
+    planSession(ses);
     return ses;
   }
 
-  // ---------- тестовый стенд: занятие планируется заранее ----------
+  // ---------- занятие планируется заранее ----------
   // Всегда 12 вопросов. До первого вопроса решаем, сколько будет новых художников (по ёмкости пула)
   // и где их показать: первого — в начале, следующего — сюрпризом в середине (если место есть).
   // У каждого нового — 3 места после знакомства, случайно и не подряд. Остальные места — жребий
@@ -555,7 +544,7 @@
     }
     ses.plan = plan; ses.intros = intros;
   }
-  // ---------- тестовый стенд: тематические занятия ----------
+  // ---------- тематические занятия ----------
   // Примерно раз в 4–5 занятий планировщик делает занятие тематическим — если для темы есть материал
   // и повод. Тема занимает до 8 из 12 мест (те, что не нужны новым художникам), остальное — как обычно.
   // Новых художников в таком занятии не больше одного. Вопросы обычных типов, но подобраны под тему.
@@ -648,7 +637,7 @@
     return x ? x.q : null;
   }
   function nextTarget(ses, offPlan = false) {
-    if (BETA && ses.plan && !offPlan) {
+    if (ses.plan && !offPlan) {
       const q = ses.plan[ses.i];
       if (q && S.artists[q]) return q;
     }
@@ -666,7 +655,7 @@
   function nextQuestion(ses) {
     for (let tries = 0; tries < 5; tries++) {
       const q = nextTarget(ses, tries >= 2);   // если по плану вопрос не собрался — берём другого художника
-      const th = BETA && ses.theme && ses.themeSlots[ses.i] && tries < 2 ? ses.theme : null;
+      const th = ses.theme && ses.themeSlots[ses.i] && tries < 2 ? ses.theme : null;
       const Q = th ? build(q, themeType(th, ses.recentTy), { vs: th.vs && th.vs(q), among: th.among })
         : (ty => build(q, ty) || (ty !== 'who' ? build(q, 'who') : null))(chooseType(q, false, ses.recentTy));
       if (Q && th) Q.theme = th.key;

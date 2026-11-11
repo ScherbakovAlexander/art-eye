@@ -1,7 +1,7 @@
 // Интерфейс: экраны и навигация. Вся логика обучения — в engine.js.
 (function () {
   const E = window.Engine, A = E.A, M = window.MOVEMENTS;
-  if (E.BETA) document.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });  // стенд: картины не перетаскиваются
+  document.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });  // картины не перетаскиваются
   // картины направления — без обрезки: ширина каждой пропорциональна её формату, высота у всех одна
   document.addEventListener('load', e => { const t = e.target; if (t.tagName === 'IMG' && t.parentNode.parentNode?.classList?.contains('mvpics')) t.parentNode.style.flexGrow = t.naturalWidth / t.naturalHeight; }, true);
   const $app = document.getElementById('app');
@@ -160,15 +160,7 @@
   // ---------- главная ----------
   function home() {
     if (window.Sync && Sync.flush) Sync.flush();   // вышли из занятия на главную — тоже отправляем
-    const s = E.stats(), r = E.introReason(), ex = E.examStatus();
-    const k = E.known();
-    let plan;
-    const pc = E.pace();
-    const active = k.filter(q => E.st(q).w > 0.3).length;
-    if (!k.length) plan = 'Знакомство с первыми художниками из очень разных эпох, затем практика. Новые будут появляться по ходу занятия.';
-    else if (r.ok) plan = `Практика${s.due ? ` и повторение (ждут: ${s.due})` : ''}. Новые художники появятся по ходу занятия${r.warmup ? ` — разгон: ${k.length} из ${E.WARMUP}` : ''}.${pc.mode === 'fast' ? ' <span class="muted">Высокая точность — в работе больше художников.</span>' : ''}`;
-    else plan = `Практика${s.due ? ` и повторение (ждут: ${s.due})` : ''}. <span class="muted">${r.why}.</span>`;
-    if (k.length) plan += `<br><span class="muted small">В работе: ${active} худ. · нагрузка ${r.load.toFixed(1)} из ${r.cap.toFixed(1)}</span>`;
+    const s = E.stats(), ex = E.examStatus();
     const examCard = ex.need ? `<div class="card exam">
         <h3>Экзамен</h3>
         <p>Вы открыли ${E.S.gate.sinceExam} новых художников с прошлого экзамена. Экзамен — только невиденные картины, без подсказок, нужно 80%.
@@ -183,14 +175,11 @@
         <div><b>${s.seenCount}</b><span>картин увидено</span></div>
         <div><b>${s.acc7 == null ? '—' : pct(s.acc7)}</b><span>точность за 7 дней</span></div>
       </div>
-      ${E.BETA ? sessionCard() : `<div class="card">
-        <h3>Занятие</h3><p>${plan}</p>
-        <button class="primary" onclick="App.session()">Начать</button>
-      </div>`}
+      ${sessionCard()}
       ${examCard}`, e => { if (e.key === 'Enter') App.session(); });
   }
 
-  // стенд: номер занятия и число вопросов; состав не раскрываем. Новый художник в начале — анонс,
+  // номер занятия и число вопросов; состав не раскрываем. Новый художник в начале — анонс,
   // «сюрприз» в середине не выдаём.
   function sessionCard() {
     // план устарел, если с тех пор изменился прогресс (вход в аккаунт, загрузка файла)
@@ -208,7 +197,7 @@
   }
   // «2 новых», «1 освоен», «5 освоено»; глагольные уровни (учу, повторяю, знаю) не склоняются
   const lvWord = (l, n) => ({ 1: plural(n, 'новый', 'новых', 'новых'), 5: plural(n, 'освоен', 'освоено', 'освоено'), 6: plural(n, 'эксперт', 'эксперта', 'экспертов') })[l.k] || l.name;
-  // сколько художников на каждом уровне (стенд)
+  // сколько художников на каждом уровне
   function levelCounts() {
     const c = {}; for (const q of E.known()) { const k = E.level(q).k; c[k] = (c[k] || 0) + 1; }
     return `<div class="lvchips">${E.LEVELS.slice(1).map(l => `<span class="lvchip lv${l.k} ${c[l.k] ? '' : 'zero'}">${l.icon} ${c[l.k] || 0} ${lvWord(l, c[l.k] || 0)}</span>`).join('')}</div>`;
@@ -217,13 +206,13 @@
     const m = E.mastery(), streak = E.dayStreak();
     return `<div class="mastery"><div class="mh"><span>Пройдено <b>${(m * 100).toFixed(m < 0.1 ? 1 : 0)}%</b></span>${streak > 1 ? `<span class="streak">🔥 ${streak} ${plural(streak, 'день', 'дня', 'дней')} подряд</span>` : ''}</div>
       <div class="bar big"><div style="width:${(m * 100).toFixed(1)}%"></div></div>
-      <div class="muted small">${E.BETA ? 'Художник освоен, когда вы узнаёте его 10 раз подряд в разные дни.' : 'Художник считается освоенным, когда вы узнаёте его и через месяц.'}</div></div>`;
+      <div class="muted small">Художник освоен, когда вы узнаёте его 10 раз подряд в разные дни.</div></div>`;
   }
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
 
   // ---------- занятие ----------
   let ses = null, Q = null, nextQ = null;
-  let planned = null;   // стенд: занятие планируется уже на главной, чтобы показать его состав
+  let planned = null;   // занятие планируется уже на главной, чтобы показать его состав
   function session() {
     ses = planned || E.newSession(); planned = null; nextQ = null;
     ses.startLv = Object.fromEntries(E.known().map(q => [q, E.level(q).k]));
@@ -235,7 +224,7 @@
     E.introduce(q, ses); nextQ = null;
     if (movFirst) movementCard(A[q].m, () => intro(q)); else intro(q);
   }
-  // стенд: три известные картины разных художников направления (сначала самые известные художники)
+  // три известные картины разных художников направления (сначала самые известные художники)
   function movementPics(m) {
     const arts = Object.values(A).filter(a => a.m === m).map(a => [a, a.t + Math.random()]).sort((x, y) => x[1] - y[1]).map(x => x[0]);
     const out = [];
@@ -254,7 +243,7 @@
         <div class="scroll">
           <div class="kicker">Новое направление</div>
           <h2>${mv.n}</h2><div class="muted">${mv.y}</div>
-          ${E.BETA ? movementPics(m) : ''}
+          ${movementPics(m)}
           <p>${mv.d}</p>
           <h4>На что смотреть</h4><ul>${mv.s.map(x => `<li>${x}</li>`).join('')}</ul>
         </div>
@@ -271,14 +260,14 @@
     });
     el.addEventListener('click', e => { const r = el.getBoundingClientRect(); go(e.clientX - r.left < r.width * 0.35 ? -1 : 1); });
   }
-  // стенд: портрет — первым крупным слайдом знакомства; если миниатюры нет — оригинал
+  // портрет — первым крупным слайдом знакомства; если миниатюры нет — оригинал
   function portraitBig(q) {
     const r = PORTRAITS[q], p = { h: r[0], f: r[1] };
     return `<img src="${url(p, 960)}" alt="" onerror="if (!this.dataset.o) { this.dataset.o = 1; this.src = '${url(p, 0)}'; }">`;
   }
   function intro(q) {
     const a = A[q], gal = E.introGallery(q, E.known().length <= E.WARMUP ? 6 : 8);
-    if (E.BETA && (window.PORTRAITS || {})[q]) gal.unshift({ portrait: true });
+    if ((window.PORTRAITS || {})[q]) gal.unshift({ portrait: true });
     let i = 0;
     const draw = () => {
       const p = gal[i]; if (!p.portrait) { E.markSeen(p); E.save(); }
@@ -403,13 +392,13 @@
       <h2>Занятие окончено</h2>
       <div class="big">${ses.done ? pct(ses.ok / ses.done) : '—'}</div><p class="muted">${ses.ok} из ${ses.done} верно</p>
       ${learned.length ? `<p>Новые художники: <b>${learned.join(', ')}</b></p>` : ''}
-      ${E.BETA ? levelUps(ses) : ''}
+      ${levelUps(ses)}
       ${funFacts(ses)}
       <button class="primary" onclick="App.home()">На главную</button>
       <button onclick="App.session()">Ещё занятие</button></div>`, e => { if (e.key === 'Enter') home(); });
     ses = null;
   }
-  // стенд: кто за занятие поднялся на уровень
+  // кто за занятие поднялся на уровень
   function levelUps(ses) {
     const ups = Object.keys(ses.res).filter(q => ses.startLv && ses.startLv[q] != null && E.level(q).k > ses.startLv[q]);
     if (!ups.length) return '';
@@ -492,7 +481,7 @@
     const exams = E.S.exams.slice(-8).reverse().map(x => `<div class="small">${new Date(x.t).toLocaleDateString('ru')} — ${pct(x.score)} ${x.pass ? '✓' : '✗'} <span class="muted">(${x.n} вопр., ${x.artists} худ.)</span></div>`).join('');
     render(`${nav()}<h2>Прогресс</h2>
       <div class="statrow"><div><b>${s.known}/${s.all}</b><span>художников</span></div><div><b>${s.seenCount}/${s.total}</b><span>картин увидено</span></div><div><b>${s.ans7}</b><span>ответов за 7 дней</span></div></div>
-      ${E.BETA ? `<div class="card"><h4>Уровни художников</h4>${levelCounts()}</div>` : ''}
+      <div class="card"><h4>Уровни художников</h4>${levelCounts()}</div>
       ${s.confs.length ? `<div class="card"><h4>Чаще всего путаете</h4>${s.confs.map(c => `<div class="small">${A[c.x].n} → ${A[c.y].n} <span class="muted">×${c.n}</span></div>`).join('')}</div>` : ''}
       ${typeStats()}
       ${exams ? `<div class="card"><h4>Экзамены</h4>${exams}</div>` : ''}
@@ -520,7 +509,7 @@
     q = q || k[k.length - 1];
     const a = A[q];
     render(`${nav()}<div class="chips">${k.map(x => `<button class="${x === q ? 'on' : ''}" onclick="App.gallery('${x}')">${A[x].n}</button>`).join('')}</div>
-      <div class="ghead">${portrait(q)}<h2>${a.n} <span class="muted small">${a.y} · ${M[a.m].n}</span>${E.BETA ? ` <span class="lv lv${E.level(q).k}">${E.level(q).icon} ${E.level(q).name}</span>` : ''}</h2></div>
+      <div class="ghead">${portrait(q)}<h2>${a.n} <span class="muted small">${a.y} · ${M[a.m].n}</span> <span class="lv lv${E.level(q).k}">${E.level(q).icon} ${E.level(q).name}</span></h2></div>
       <div class="wall">${[...a.p].sort((x, y) => (x.y || 9999) - (y.y || 9999)).map(p => `<button onclick="App.lightbox('${p.id}')">${img(p, 330)}</button>`).join('')}</div>`);
   }
   function lightbox(id) {
