@@ -86,8 +86,12 @@
   // ---------- интервальные повторения (на уровне художника) ----------
   // stab — «стабильность» в днях: через сколько пора повторить. Верный ответ растит её тем сильнее,
   // чем дольше прошло с прошлого раза (повтор раньше срока почти ничего не даёт), ошибка — резко режет.
+  // стенд: художники, с которыми познакомились в этом занятии, — чаще среди неверных вариантов,
+  // чтобы «свежее имя» не было подсказкой
+  let sesNew = new Set();
   function introduce(q, ses = null) {
     rollDay();
+    if (ses) sesNew.add(q);
     // художники разгона не тратят дневной лимит
     if (known().length >= WARMUP) S.day.intro++;
     S.artists[q] = { intro: now(), stab: 0.5, due: now() + 0.5 * DAY, last: now(), ok: 0, n: 0, lapses: 0, recent: [], w: 1, streak: 0, sDays: [], sGap: 0 };
@@ -324,7 +328,7 @@
       const sim = pd != null ? pd : o.m === t.m ? 1 : 0.75 * Math.exp(-Math.abs(o.mid - t.mid) / 50);
       const conf = (S.conf[q + '|' + c] || 0) + (S.conf[c + '|' + q] || 0);
       // варианты — из пар, близких к целевой трудности; художники, которых уже путали, — чаще
-      return Math.exp(-(((sim - T) / 0.15) ** 2)) + 0.03 + 3 * Math.min(conf, 4);
+      return Math.exp(-(((sim - T) / 0.15) ** 2)) + 0.03 + 3 * Math.min(conf, 4) + (BETA && sesNew.has(c) ? 1 : 0);
     });
     return weightedSample(cand, w, n);
   }
@@ -350,7 +354,11 @@
     const av = availableTypes();
     const s = st(q);
     // первый вопрос о свежем художнике — «кто автор», чтобы закрепить связь картина→имя
-    if (!exam && s && s.n < (BETA ? 3 : 1)) return 'who';
+    // стенд: первые три — «кто автор», потом «найдите его картину» (узнать манеру, а не угадать новое имя), потом любой из двух
+    if (!exam && s && s.n < (BETA ? 3 : 1)) {
+      if (!BETA || s.n === 0 || !av.includes('find')) return 'who';
+      return s.n === 1 || Math.random() < 0.5 ? 'find' : 'who';
+    }
     // при низкой общей точности сложные форматы реже
     const easy = !exam && pace().mode === 'easy';
     // против однообразия: тип, который только что был, — реже (два «кто автор» подряд допустимы)
@@ -468,6 +476,7 @@
   // интервалах внутри занятия (1, 3, 6, 10, 15-й вопрос), (3) просроченные по SR,
   // (4) остальные — чаще слабые. Один художник не идёт два раза подряд.
   function newSession() {
+    sesNew = new Set();
     const ses = { newIds: [], res: {}, start: { mastery: mastery(), seen: Object.keys(S.seen).length, known: known().length }, i: 0, len: S.settings.sessionLen, lastIntro: -99, retry: [], recentT: [], recentTy: [], ok: 0, done: 0 };
     if (BETA) planSession(ses);
     return ses;
@@ -534,10 +543,11 @@
         ses.themeSlots[i] = true;
       }
     }
-    // остальные места: жребий среди всех знакомых (+ те новые, что к этому месту уже показаны)
+    // остальные места: жребий среди всех знакомых. Новым хватает их трёх мест;
+    // только пока знакомых меньше трёх — и новые (те, что к этому месту уже показаны)
     for (let i = 0; i < PLAN_LEN; i++) {
       if (plan[i]) continue;
-      const pool = k.map(q => [q, priority(q)]).concat(intros.filter(x => x.at <= i).map(x => [x.q, 1]));
+      const pool = k.map(q => [q, priority(q)]).concat(k.length < 3 ? intros.filter(x => x.at <= i).map(x => [x.q, 1]) : []);
       let cand = pool.filter(([q]) => !near(i, q));
       if (!cand.length) cand = pool;
       plan[i] = cand.length ? weighted(cand.map(c => c[0]), cand.map(c => c[1])) : null;
@@ -657,7 +667,7 @@
       const q = nextTarget(ses, tries >= 2);   // если по плану вопрос не собрался — берём другого художника
       const th = BETA && ses.theme && ses.themeSlots[ses.i] && tries < 2 ? ses.theme : null;
       const Q = th ? build(q, themeType(th, ses.recentTy), { vs: th.vs && th.vs(q), among: th.among })
-        : build(q, chooseType(q, false, ses.recentTy));
+        : (ty => build(q, ty) || (ty !== 'who' ? build(q, 'who') : null))(chooseType(q, false, ses.recentTy));
       if (Q && th) Q.theme = th.key;
       if (Q) { ses.recentT.push(q); ses.recentTy.push(Q.type); return Q; }
     }
@@ -680,6 +690,7 @@
   // Только невиденные картины, без подсказок по ходу. Покрывает всех знакомых художников,
   // недавно введённых — чаще. Порог 80%; провал откатывает стабильность ошибочных художников.
   function buildExam() {
+    sesNew = new Set();
     const k = known();
     // «большая проверка»: каждый знакомый художник хотя бы раз (до 30 вопросов)
     const n = EXAMS_ON ? Math.min(25, Math.max(15, k.length * 2)) : Math.min(30, Math.max(15, k.length));
