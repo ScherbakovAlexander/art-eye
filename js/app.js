@@ -1,6 +1,7 @@
 // Интерфейс: экраны и навигация. Вся логика обучения — в engine.js.
 (function () {
   const E = window.Engine, A = E.A, M = window.MOVEMENTS;
+  if (E.BETA) document.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });  // стенд: картины не перетаскиваются
   const $app = document.getElementById('app');
   let onKey = null;
   document.addEventListener('keydown', e => { if (onKey && !e.ctrlKey && !e.metaKey && !e.altKey) onKey(e); });
