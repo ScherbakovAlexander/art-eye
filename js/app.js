@@ -233,7 +233,10 @@
   // ---------- занятие ----------
   let ses = null, Q = null, nextQ = null;
   let planned = null;   // занятие планируется уже на главной, чтобы показать его состав
+  // статистика посещений (GoatCounter): кроме открытий страницы — начатые и законченные занятия
+  const track = name => { try { window.goatcounter?.count?.({ path: (E.BETA ? 'beta-' : '') + name, title: name, event: true }); } catch (e) { } };
   function session() {
+    track('session-start');
     ses = planned || E.newSession(); planned = null; nextQ = null;
     ses.startLv = Object.fromEntries(E.known().map(q => [q, E.level(q).k]));
     quizStep();
@@ -405,7 +408,7 @@
   }
 
   function sessionEnd() {
-    E.endSession(ses);
+    E.endSession(ses); track('session-end');
     if (window.Sync && Sync.flush) Sync.flush();   // прогресс уходит на сервер раз за занятие
     const learned = ses.newIds.map(n => A[n.q].n);
     render(`${nav()}<div class="card center">
