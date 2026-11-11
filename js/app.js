@@ -133,8 +133,27 @@
   // fit — экран занятия: ровно в высоту телефона, без прокрутки
   function render(html, key = null, fit = false) {
     closeMenu(); document.body.classList.toggle('fit', fit);
-    $app.innerHTML = html; onKey = key; window.scrollTo(0, 0);
+    $app.innerHTML = html; onKey = key; window.scrollTo(0, 0); atHome = false;
   }
+
+  // ---------- обновление ----------
+  // Вкладку на телефоне могут не перезагружать днями — тогда человек сидит на старой версии.
+  // На главной (не посреди занятия) спрашиваем у сервера свежую страницу и сравниваем номер версии ?v= у app.js;
+  // если вышла новая — тихо перезагружаемся. Не чаще раза в 5 минут; на одну и ту же версию — одна попытка.
+  const MY_V = ((document.currentScript || {}).src || '').match(/app\.js\?v=(\d+)/)?.[1];
+  let atHome = false, lastCheck = 0;
+  function checkVersion() {
+    if (!MY_V || Date.now() - lastCheck < 5 * 60e3) return;
+    lastCheck = Date.now();
+    fetch(location.pathname, { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(h => {
+      const v = h.match(/app\.js\?v=(\d+)/)?.[1];
+      let tried = null; try { tried = sessionStorage.getItem('arteye.reloadedFor'); } catch (e) { }
+      if (!v || v === MY_V || tried === v || !atHome) return;
+      try { sessionStorage.setItem('arteye.reloadedFor', v); } catch (e) { }
+      location.reload();
+    }).catch(() => { });
+  }
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && atHome) checkVersion(); });
   const acctLabel = () => window.Sync && Sync.user ? esc(Sync.user.email || 'Аккаунт') : 'Войти / регистрация';
   const gear = () => `<button class="iconbtn" onclick="App.menu()" aria-label="Меню">⚙</button>`;
   // на телефоне остаются название, вход и шестерёнка, остальное — в меню
@@ -177,6 +196,7 @@
       </div>
       ${sessionCard()}
       ${examCard}`, e => { if (e.key === 'Enter') App.session(); });
+    atHome = true; checkVersion();
   }
 
   // номер занятия и число вопросов; состав не раскрываем. Новый художник в начале — анонс,
