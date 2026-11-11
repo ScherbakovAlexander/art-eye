@@ -264,3 +264,9 @@ button.choose { margin-top: 8px; }
 .zoomov { position: fixed; inset: 0; z-index: 30; background: rgba(10,9,8,0); transition: background .2s; touch-action: none; overflow: hidden; }
 .zoomov.on { background: rgba(10,9,8,.88); }
 .zoomov img { position: fixed; object-fit: contain; transform-origin: 0 0; max-width: none; max-height: none; background: none; will-change: transform; }
+
+/* стенд: три картины на карточке нового направления */
+.mvpics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 4px; }
+.mvpics button { padding: 0; margin: 0; border: none; background: none; display: grid; gap: 4px; cursor: zoom-in; color: var(--muted); font-size: .8em; text-align: center; min-width: 0; }
+.mvpics img { width: 100%; height: min(26vh, 220px); object-fit: cover; border-radius: 8px; background: var(--panel); }
+.mvpics span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

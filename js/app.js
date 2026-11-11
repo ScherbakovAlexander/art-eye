@@ -232,6 +232,18 @@
     E.introduce(q, ses); nextQ = null;
     if (movFirst) movementCard(A[q].m, () => intro(q)); else intro(q);
   }
+  // стенд: три известные картины разных художников направления (сначала самые известные художники)
+  function movementPics(m) {
+    const arts = Object.values(A).filter(a => a.m === m).map(a => [a, a.t + Math.random()]).sort((x, y) => x[1] - y[1]).map(x => x[0]);
+    const out = [];
+    for (const a of arts) {
+      const ok = a.p.filter(p => !E.S.broken[p.id]), fam = ok.filter(p => p.fam);
+      const list = fam.length ? fam : ok;
+      if (list.length) out.push(list[Math.floor(Math.random() * list.length)]);
+      if (out.length === 3) break;
+    }
+    return out.length ? `<div class="mvpics">${out.map(p => `<button onclick="App.lightbox('${p.id}')">${img(p, 500)}<span>${A[p.a].n}</span></button>`).join('')}</div>` : '';
+  }
   function movementCard(m, next) {
     const mv = M[m];
     App._next = next;
@@ -239,6 +251,7 @@
         <div class="scroll">
           <div class="kicker">Новое направление</div>
           <h2>${mv.n}</h2><div class="muted">${mv.y}</div>
+          ${E.BETA ? movementPics(m) : ''}
           <p>${mv.d}</p>
           <h4>На что смотреть</h4><ul>${mv.s.map(x => `<li>${x}</li>`).join('')}</ul>
         </div>
@@ -255,18 +268,24 @@
     });
     el.addEventListener('click', e => { const r = el.getBoundingClientRect(); go(e.clientX - r.left < r.width * 0.35 ? -1 : 1); });
   }
+  // стенд: портрет — первым крупным слайдом знакомства; если миниатюры нет — оригинал
+  function portraitBig(q) {
+    const r = PORTRAITS[q], p = { h: r[0], f: r[1] };
+    return `<img src="${url(p, 960)}" alt="" onerror="if (!this.dataset.o) { this.dataset.o = 1; this.src = '${url(p, 0)}'; }">`;
+  }
   function intro(q) {
     const a = A[q], gal = E.introGallery(q, E.known().length <= E.WARMUP ? 6 : 8);
+    if (E.BETA && (window.PORTRAITS || {})[q]) gal.unshift({ portrait: true });
     let i = 0;
     const draw = () => {
-      const p = gal[i]; E.markSeen(p); E.save();
+      const p = gal[i]; if (!p.portrait) { E.markSeen(p); E.save(); }
       const last = i === gal.length - 1;
       render(`<div class="stage intro">${topRow()}
         <div class="head">${portrait(q)}<div><div class="kicker">Новый художник</div>
           <h2>${a.n}</h2><div class="muted small">${a.y} · ${a.c} · ${M[a.m].n}</div></div></div>
-        <figure class="frame swipe" id="viewer">${img(p)}
+        <figure class="frame swipe" id="viewer">${p.portrait ? portraitBig(q) : img(p)}
           ${i ? '<span class="edge l">‹</span>' : ''}${last ? '' : '<span class="edge r">›</span>'}</figure>
-        ${caption(p, false)}
+        ${p.portrait ? `<div class="cap">Это сам художник — <b>${a.n}</b>. Дальше — его картины</div>` : caption(p, false)}
         <div class="dots">${gal.map((_, j) => `<span class="${j === i ? 'on' : ''}" onclick="App._go(${j - i})"></span>`).join('')}</div>
         <div class="traits"><h4>Что замечать</h4>${a.s.map(x => `<span>${x}</span>`).join('')}</div>
         <div class="navrow"><button onclick="App._go(-1)" ${i ? '' : 'disabled'} aria-label="Назад">‹</button>
@@ -277,7 +296,7 @@
         else if (e.key === 'Enter') last ? App._done() : App._go(1);
       }, true);
       swipe(document.getElementById('viewer'), App._go);
-      if (gal[i + 1]) { const n = new Image(); n.src = url(gal[i + 1], 960); }
+      if (gal[i + 1] && !gal[i + 1].portrait) { const n = new Image(); n.src = url(gal[i + 1], 960); }
     };
     App._go = d => { const j = i + d; if (j >= 0 && j < gal.length) { i = j; draw(); } };
     App._done = quizStep;
