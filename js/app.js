@@ -549,7 +549,9 @@
     render(`${nav()}<h2>Настройки</h2><div class="card">
       <label>Новых художников в день <input type="number" min="1" max="15" value="${st.newPerDay}" onchange="App._set('newPerDay',this.value)"></label>
       <label>Вопросов в занятии <input type="number" min="5" max="50" value="${st.sessionLen}" onchange="App._set('sessionLen',this.value)"></label></div>
-      <div class="card"><h4>Сохранение прогресса</h4><p class="muted small">Прогресс хранится в этом браузере. Можно перенести файлом.</p>
+      <div class="card"><h4>Сохранение прогресса</h4><p class="muted small">${window.Sync && Sync.user ? 'Прогресс сохраняется в аккаунте.'
+        : window.Sync && Sync.anonId ? `Прогресс хранится в этом браузере, копия — на сервере (номер ${Sync.anonId.slice(0, 6)}). Чтобы продолжить на другом устройстве, войдите в аккаунт — прогресс перейдёт в него.`
+        : 'Прогресс хранится в этом браузере. Можно перенести файлом.'}</p>
       <button onclick="App._export()">Скачать прогресс</button>
       <label class="btn">Загрузить из файла<input type="file" accept=".json" hidden onchange="App._import(this.files[0])"></label>
       <button class="danger" onclick="App._reset()">Сбросить всё</button></div>`);
