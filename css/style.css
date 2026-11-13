@@ -274,3 +274,8 @@ button.choose { margin-top: 8px; }
 body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 input, textarea { -webkit-user-select: text; user-select: text; }
 img { -webkit-user-drag: none; }
+.notes { display: grid; gap: 6px; margin: 4px 0 12px; }
+.notes details { background: var(--panel); border-radius: 8px; padding: 8px 12px; }
+.notes summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.notes details[open] summary { margin-bottom: 6px; }
+.notes p, .notes ul { margin: 4px 0; } .notes h4 { margin: 10px 0 2px; }
