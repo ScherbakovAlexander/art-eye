@@ -4,7 +4,7 @@
   const cfg = window.FIREBASE_CONFIG;
   // user — вошедший по email/Google; anonId — анонимный номер браузера (стенд): прогресс гостя тоже уходит на сервер
   const Sync = window.Sync = { enabled: !!(cfg && window.firebase), user: null, anonId: null, status: '' };
-  const ANON = !!window.BETA;   // анонимный аккаунт для гостей — пока только на стенде
+  const ANON = true;   // гость тихо получает анонимный аккаунт — прогресс уходит на сервер
   if (!Sync.enabled) return;
 
   firebase.initializeApp(cfg);
