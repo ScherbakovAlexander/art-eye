@@ -533,10 +533,10 @@
     const a = A[q];
     render(`${nav()}<div class="chips">${k.map(x => `<button class="${x === q ? 'on' : ''}" onclick="App.gallery('${x}')">${A[x].n}</button>`).join('')}</div>
       <div class="ghead">${portrait(q)}<h2>${a.n} <span class="muted small">${a.y} · ${M[a.m].n}</span> <span class="lv lv${E.level(q).k}">${E.level(q).icon} ${E.level(q).name}</span></h2></div>
-      ${E.BETA ? galleryNotes(a) : ''}
+      ${galleryNotes(a)}
       <div class="wall">${[...a.p].sort((x, y) => (x.y || 9999) - (y.y || 9999)).map(p => `<button onclick="App.lightbox('${p.id}')">${img(p, 330)}</button>`).join('')}</div>`);
   }
-  // стенд: то же, что рассказывали при знакомстве, — свёрнуто, раскрывается по нажатию
+  // то же, что рассказывали при знакомстве, — свёрнуто, раскрывается по нажатию
   function galleryNotes(a) {
     const mv = M[a.m];
     return `<div class="notes">
