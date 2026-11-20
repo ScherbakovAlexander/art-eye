@@ -4,6 +4,17 @@
   document.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });  // картины не перетаскиваются
   // картины направления — без обрезки: ширина каждой пропорциональна её формату, высота у всех одна
   document.addEventListener('load', e => { const t = e.target; if (t.tagName === 'IMG' && t.parentNode.parentNode?.classList?.contains('mvpics')) t.parentNode.style.flexGrow = t.naturalWidth / t.naturalHeight; }, true);
+  // стенд: Safari на iPhone всё равно приближает страницу двойным тапом по пустому месту (touch-action там не спасает) —
+  // гасим второй тап подряд, если он не по кнопке/ссылке (их быстрые нажатия не трогаем)
+  if (E.BETA) {
+    document.documentElement.classList.add('stand');
+    let lastTap = 0;
+    document.addEventListener('touchend', e => {
+      const t = Date.now(), quick = t - lastTap < 350; lastTap = t;
+      if (!quick || e.touches.length || document.querySelector('.zoomov')) return;
+      if (!e.target.closest('button, a, input, textarea, select, summary, label, [onclick]')) e.preventDefault();
+    }, { passive: false });
+  }
   const $app = document.getElementById('app');
   let onKey = null;
   document.addEventListener('keydown', e => { if (onKey && !e.ctrlKey && !e.metaKey && !e.altKey) onKey(e); });
@@ -333,7 +344,8 @@
   }
 
   function drawQuestion(Q, { progress, onPick, exam }) {
-    const car = Q.grid && Q.paintings.length > 2 && matchMedia('(max-width: 640px) and (orientation: portrait)').matches;
+    // листалка (одна крупная картина + номера): на телефоне вертикально, а на стенде — везде, сетка 2×2 слишком мелкая и на компьютере
+    const car = Q.grid && Q.paintings.length > 2 && (E.BETA || matchMedia('(max-width: 640px) and (orientation: portrait)').matches);
     const pics = Q.grid
       ? `<div class="grid ${Q.paintings.length === 2 ? 'two' : ''} ${car ? 'car swipe' : ''}" id="grid">${Q.paintings.map((p, j) => `<button class="pic ${j ? '' : 'cur'}" data-v="${p.id}" ${car ? '' : `onclick="App._pick('${p.id}')"`}><span class="num">${j + 1}</span>${img(p, car ? 960 : 500)}</button>`).join('')}</div>`
         + (car ? `<div class="pager">${Q.paintings.map((p, j) => `<button class="${j ? '' : 'on'}" data-v="${p.id}" onclick="App._show(${j})">${j + 1}</button>`).join('')}</div>` : '')
@@ -347,6 +359,14 @@
           <div class="prompt">${exam ? '<span class="tag">проверка</span>' : ''}${Q.prompt}</div>
           <div class="pics" id="pics">${pics}</div><div class="bottom" id="fb">${opts}</div>
         </div>`, e => {
+      // в листалке клавиши листают (цифра — к картине, стрелки — соседняя), Enter выбирает показанную
+      if (car) {
+        const n = +e.key;
+        if (n >= 1 && n <= Q.paintings.length) App._show(n - 1);
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') App._show(App._cur() + (e.key === 'ArrowLeft' ? -1 : 1));
+        else if (e.key === 'Enter') App._pick(App._curId());
+        return;
+      }
       const n = +e.key; if (n >= 1 && n <= Q.options.length) App._pick(String(Q.options[n - 1].v));
     }, true);
     if (car) {
@@ -356,7 +376,7 @@
         document.querySelectorAll('#grid .pic').forEach((b, k) => b.classList.toggle('cur', k === cur));
         document.querySelectorAll('.pager button').forEach((b, k) => b.classList.toggle('on', k === cur));
       };
-      App._curId = () => Q.paintings[cur].id;
+      App._curId = () => Q.paintings[cur].id; App._cur = () => cur;
       swipe(document.getElementById('grid'), d => App._show(cur + d));
     }
   }

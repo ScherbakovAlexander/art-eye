@@ -207,6 +207,17 @@ nav .iconbtn { margin-left: 4px; }
   .stage.intro .traits { grid-area: traits; max-height: none; } .stage.intro .navrow { grid-area: nav; }
 }
 
+/* стенд: кнопки и ссылки — без приближения двойным тапом */
+html.stand button, html.stand a, html.stand summary { touch-action: manipulation; }
+/* стенд: только вертикально. Повернуть экран за человека сайт не может (браузер не даёт), поэтому боком — просьба повернуть */
+.rotate { display: none; }
+@media (orientation: landscape) and (max-height: 520px) {
+  html.stand .rotate { display: flex; position: fixed; inset: 0; z-index: 100; background: var(--bg); color: var(--text);
+    flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; font-size: 1.1em; padding: 16px; }
+  html.stand .rotate b { font-size: 2.4em; color: var(--accent); }
+  html.stand body { overflow: hidden; }
+}
+
 /* подсветка при наведении — только там, где есть мышь: на телефоне она «залипает» на месте последнего нажатия */
 @media (hover: hover) {
   nav a:hover { color: var(--text); }
