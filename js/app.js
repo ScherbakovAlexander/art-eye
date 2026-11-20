@@ -4,10 +4,9 @@
   document.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });  // картины не перетаскиваются
   // картины направления — без обрезки: ширина каждой пропорциональна её формату, высота у всех одна
   document.addEventListener('load', e => { const t = e.target; if (t.tagName === 'IMG' && t.parentNode.parentNode?.classList?.contains('mvpics')) t.parentNode.style.flexGrow = t.naturalWidth / t.naturalHeight; }, true);
-  // стенд: Safari на iPhone всё равно приближает страницу двойным тапом по пустому месту (touch-action там не спасает) —
+  // Safari на iPhone всё равно приближает страницу двойным тапом по пустому месту (touch-action там не спасает) —
   // гасим второй тап подряд, если он не по кнопке/ссылке (их быстрые нажатия не трогаем)
-  if (E.BETA) {
-    document.documentElement.classList.add('stand');
+  {
     let lastTap = 0;
     document.addEventListener('touchend', e => {
       const t = Date.now(), quick = t - lastTap < 350; lastTap = t;
@@ -344,8 +343,8 @@
   }
 
   function drawQuestion(Q, { progress, onPick, exam }) {
-    // листалка (одна крупная картина + номера): на телефоне вертикально, а на стенде — везде, сетка 2×2 слишком мелкая и на компьютере
-    const car = Q.grid && Q.paintings.length > 2 && (E.BETA || matchMedia('(max-width: 640px) and (orientation: portrait)').matches);
+    // листалка (одна крупная картина + номера) — везде: сетка 2×2 слишком мелкая даже на компьютере
+    const car = Q.grid && Q.paintings.length > 2;
     const pics = Q.grid
       ? `<div class="grid ${Q.paintings.length === 2 ? 'two' : ''} ${car ? 'car swipe' : ''}" id="grid">${Q.paintings.map((p, j) => `<button class="pic ${j ? '' : 'cur'}" data-v="${p.id}" ${car ? '' : `onclick="App._pick('${p.id}')"`}><span class="num">${j + 1}</span>${img(p, car ? 960 : 500)}</button>`).join('')}</div>`
         + (car ? `<div class="pager">${Q.paintings.map((p, j) => `<button class="${j ? '' : 'on'}" data-v="${p.id}" onclick="App._show(${j})">${j + 1}</button>`).join('')}</div>` : '')

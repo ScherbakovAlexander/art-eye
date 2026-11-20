@@ -191,31 +191,15 @@ nav .iconbtn { margin-left: 4px; }
   .navrow button, button.wide { min-height: 46px; padding: 8px 14px; }
 }
 
-/* телефон боком: картина слева, вопрос и ответы справа */
-@media (orientation: landscape) and (max-height: 520px) {
-  .stage.quiz { display: grid; grid-template-columns: 1.25fr 1fr; grid-template-rows: auto auto minmax(0, 1fr); column-gap: 12px;
-    grid-template-areas: "top top" "pics prompt" "pics bottom"; }
-  .stage.quiz .top { grid-area: top; } .stage.quiz .prompt { grid-area: prompt; }
-  .stage.quiz .pics { grid-area: pics; } .stage.quiz .bottom { grid-area: bottom; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
-  .stage.quiz .opts, .stage.quiz .opts.two { grid-template-columns: 1fr; margin-top: 0; }
-  .stage.quiz .feedback { margin-top: 0; max-height: none; flex: 1 1 auto; min-height: 0; }
-  .stage.quiz .feedback .fbody { flex: 1 1 auto; }
-  .stage.intro { display: grid; grid-template-columns: 1.25fr 1fr; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; column-gap: 12px;
-    grid-template-areas: "top top" "frame head" "frame cap" "frame dots" "frame traits" "frame nav"; }
-  .stage.intro .top { grid-area: top; } .stage.intro .head { grid-area: head; } .stage.intro .frame { grid-area: frame; }
-  .stage.intro .cap { grid-area: cap; text-align: left; } .stage.intro .dots { grid-area: dots; text-align: left; }
-  .stage.intro .traits { grid-area: traits; max-height: none; } .stage.intro .navrow { grid-area: nav; }
-}
-
-/* стенд: кнопки и ссылки — без приближения двойным тапом */
-html.stand button, html.stand a, html.stand summary { touch-action: manipulation; }
-/* стенд: только вертикально. Повернуть экран за человека сайт не может (браузер не даёт), поэтому боком — просьба повернуть */
+/* кнопки и ссылки — без приближения двойным тапом */
+button, a, summary { touch-action: manipulation; }
+/* телефон — только вертикально (на компьютере окно может быть низким и широким — его не трогаем). Повернуть экран за человека сайт не может (браузер не даёт), поэтому боком — просьба повернуть */
 .rotate { display: none; }
-@media (orientation: landscape) and (max-height: 520px) {
-  html.stand .rotate { display: flex; position: fixed; inset: 0; z-index: 100; background: var(--bg); color: var(--text);
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+  .rotate { display: flex; position: fixed; inset: 0; z-index: 100; background: var(--bg); color: var(--text);
     flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; font-size: 1.1em; padding: 16px; }
-  html.stand .rotate b { font-size: 2.4em; color: var(--accent); }
-  html.stand body { overflow: hidden; }
+  .rotate b { font-size: 2.4em; color: var(--accent); }
+  body { overflow: hidden; }
 }
 
 /* подсветка при наведении — только там, где есть мышь: на телефоне она «залипает» на месте последнего нажатия */
