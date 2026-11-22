@@ -4,6 +4,7 @@
   C:\\Users\\User\\.secrets\\art-eye-reader.json  (или путь в переменной ARTEYE_KEY)
 Запуск:  python tools/report.py          — сводка
          python tools/report.py --days   — плюс активность по дням
+         python tools/report.py --md     — то же таблицами Markdown (для чата)
 """
 import json, os, sys, time
 from datetime import datetime
@@ -71,6 +72,20 @@ def main():
         print(f"Хотя бы одно занятие: {len(real)};  2+ дня: {sum(1 for r in real if r['ndays'] >= 2)};  "
               f"бросили (>7 дней нет): {sum(1 for r in real if now - r['last'] > 7 * DAY)}")
     print()
+    if '--md' in sys.argv:   # таблицы в Markdown — для чата
+        print('| кто | сайт | худ. | занятий | дней | ответов | точность | начал | последний раз |')
+        print('|---|---|--:|--:|--:|--:|--:|---|---|')
+        for r in rows:
+            who = r['email'] or f"гость {r['id']}"
+            acc = f"{r['acc']}%" if r['acc'] is not None else '—'
+            print(f"| {who} | {r['site']} | {r['artists']} | {r['sessions']} | {r['ndays']} | {r['answers']} | {acc} | {fmt(r['first'])} | {fmt(r['last'])} |")
+        if '--days' in sys.argv:
+            tot, ppl = Counter(), Counter()
+            for r in rows:
+                for k, v in r['days'].items(): tot[k] += v; ppl[k] += 1
+            print('\n| день | людей | ответов |\n|---|--:|--:|')
+            for k in sorted(tot)[-30:]: print(f"| {k[8:]}.{k[5:7]} | {ppl[k]} | {tot[k]} |")
+        return
     hdr = f"{'id':6} {'сайт':5} {'кто':7} {'худ':>4} {'зан':>4} {'дней':>4} {'отв':>5} {'точн':>5} {'начал':>11} {'последний':>11}  email"
     print(hdr); print('-' * len(hdr))
     for r in rows:
