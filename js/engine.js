@@ -28,6 +28,10 @@
   function midYear(y) { const m = y.match(/\d{4}/g); return m ? (+m[0] + +m[m.length - 1]) / 2 : 1800; }
 
   // ---------- состояние ----------
+  // стенд: новый (пустой) прогресс сразу помечаем «миграции пройдены» — иначе при втором заходе
+  // миграции для старых версий срабатывают на нём (bal6 прибавлял журнал к счётчику дней ещё раз)
+  const MIGRATED = { bal2: 1, bal3: 1, bal4: 1, bal5: 1, bal6: 1, bal7: 1 };
+  const blank = () => BETA ? Object.assign(fresh(), MIGRATED) : fresh();
   function fresh() {
     return {
       v: 1, artists: {}, seen: {}, conf: {}, log: [], exams: [], movSeen: {}, broken: {},
@@ -42,10 +46,11 @@
   let S = load();
   function load() {
     try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return migrate(Object.assign(fresh(), s)); } catch (e) { }
-    return fresh();
+    return blank();
   }
   // старый дневной лимит 3 тормозил после разгона — поднимаем один раз
   function migrate(s) {
+    if (BETA && !(s.log || []).length && !Object.keys(s.artists || {}).length) Object.assign(s, MIGRATED);
     if (!s.bal2) { s.settings.newPerDay = Math.max(6, s.settings.newPerDay); s.day.intro = 0; s.bal2 = 1; }
     if (!s.bal3) { s.settings.newPerDay = Math.max(12, s.settings.newPerDay); s.bal3 = 1; }
     // занятия короче
@@ -72,8 +77,9 @@
     for (const q in s.artists) { const a = s.artists[q]; if (a.w == null) a.w = a.stab < 1 ? 0.6 : a.stab < 7 ? 0.3 : 0.1; }
     return s;
   }
-  let onSave = null;
+  let onSave = null, frozen = false;
   function save() {
+    if (frozen) return;   // вкладка устарела: прогресс пишет другая вкладка
     S.updatedAt = now();
     try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { }
     if (onSave) onSave(S);
@@ -737,7 +743,13 @@
     examStatus, pendingNew, poolLoad, BETA, LEVELS, capacity, newSession, nextQuestion, answer, afterAnswer, endSession, buildExam, finishExam, markSeen, paintingById,
     stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak, pairDiff,
     set onSave(fn) { onSave = fn; },
-    reset() { S = fresh(); save(); },
+    reset() { S = blank(); save(); },
+    // стенд: сайт открыт в нескольких вкладках — каждая держит свою копию прогресса и сохраняет её целиком,
+    // побеждала последняя (сделанное в другой терялось). Теперь вкладка узнаёт о чужом сохранении:
+    // берёт свежий прогресс (adopt) или, если посреди занятия, перестаёт сохранять (freeze)
+    set onExternal(fn) { if (BETA) addEventListener('storage', e => { if (e.key === KEY && e.newValue) fn(e.newValue); }); },
+    adopt(json) { try { S = migrate(Object.assign(fresh(), JSON.parse(json))); } catch (e) { } },
+    freeze() { frozen = true; },
     importState(o, { silent = false } = {}) {
       S = migrate(Object.assign(fresh(), o));
       if (silent) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } } else save();

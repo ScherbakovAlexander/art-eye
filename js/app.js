@@ -625,5 +625,17 @@
     _import(f) { if (!f) return; f.text().then(t => { E.importState(JSON.parse(t)); home(); }).catch(() => alert('Не удалось прочитать файл')); },
     _reset() { if (confirm('Удалить весь прогресс?')) { E.reset(); home(); } }
   };
+  // стенд: прогресс сохранила другая вкладка. Не посреди занятия — берём свежий прогресс молча;
+  // посреди занятия — останавливаем эту вкладку, чтобы она не перезаписала сделанное там
+  E.onExternal = json => {
+    E.adopt(json); planned = null;
+    if (ses || document.querySelector('.stage.quiz, .stage.intro')) {
+      E.freeze();
+      if (!document.querySelector('.stale')) document.body.insertAdjacentHTML('beforeend', `<div class="stale"><div class="card center">
+        <h2>Сайт открыт в другой вкладке</h2>
+        <p class="muted">Прогресс сохраняется там. Эта вкладка остановлена, чтобы ничего не потерялось.</p>
+        <button class="primary" onclick="location.reload()">Продолжить здесь</button></div></div>`);
+    } else if (atHome) home();
+  };
   home();
 })();

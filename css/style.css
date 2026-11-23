@@ -202,6 +202,10 @@ button, a, summary { touch-action: manipulation; }
   body { overflow: hidden; }
 }
 
+/* вкладка остановлена: прогресс пишет другая вкладка */
+.stale { position: fixed; inset: 0; z-index: 90; background: rgba(10,9,8,.85); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.stale .card { max-width: 420px; }
+
 /* подсветка при наведении — только там, где есть мышь: на телефоне она «залипает» на месте последнего нажатия */
 @media (hover: hover) {
   nav a:hover { color: var(--text); }
