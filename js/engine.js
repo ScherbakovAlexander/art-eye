@@ -28,10 +28,10 @@
   function midYear(y) { const m = y.match(/\d{4}/g); return m ? (+m[0] + +m[m.length - 1]) / 2 : 1800; }
 
   // ---------- состояние ----------
-  // стенд: новый (пустой) прогресс сразу помечаем «миграции пройдены» — иначе при втором заходе
+  // новый (пустой) прогресс сразу помечаем «миграции пройдены» — иначе при втором заходе
   // миграции для старых версий срабатывают на нём (bal6 прибавлял журнал к счётчику дней ещё раз)
   const MIGRATED = { bal2: 1, bal3: 1, bal4: 1, bal5: 1, bal6: 1, bal7: 1 };
-  const blank = () => BETA ? Object.assign(fresh(), MIGRATED) : fresh();
+  const blank = () => Object.assign(fresh(), MIGRATED);
   function fresh() {
     return {
       v: 1, artists: {}, seen: {}, conf: {}, log: [], exams: [], movSeen: {}, broken: {},
@@ -50,7 +50,7 @@
   }
   // старый дневной лимит 3 тормозил после разгона — поднимаем один раз
   function migrate(s) {
-    if (BETA && !(s.log || []).length && !Object.keys(s.artists || {}).length) Object.assign(s, MIGRATED);
+    if (!(s.log || []).length && !Object.keys(s.artists || {}).length) Object.assign(s, MIGRATED);
     if (!s.bal2) { s.settings.newPerDay = Math.max(6, s.settings.newPerDay); s.day.intro = 0; s.bal2 = 1; }
     if (!s.bal3) { s.settings.newPerDay = Math.max(12, s.settings.newPerDay); s.bal3 = 1; }
     // занятия короче
@@ -744,10 +744,10 @@
     stats, shuffle, TYPES, skill, pace, WARMUP, build, mastery, dayStreak, pairDiff,
     set onSave(fn) { onSave = fn; },
     reset() { S = blank(); save(); },
-    // стенд: сайт открыт в нескольких вкладках — каждая держит свою копию прогресса и сохраняет её целиком,
+    // сайт открыт в нескольких вкладках — каждая держит свою копию прогресса и сохраняет её целиком,
     // побеждала последняя (сделанное в другой терялось). Теперь вкладка узнаёт о чужом сохранении:
     // берёт свежий прогресс (adopt) или, если посреди занятия, перестаёт сохранять (freeze)
-    set onExternal(fn) { if (BETA) addEventListener('storage', e => { if (e.key === KEY && e.newValue) fn(e.newValue); }); },
+    set onExternal(fn) { addEventListener('storage', e => { if (e.key === KEY && e.newValue) fn(e.newValue); }); },
     adopt(json) { try { S = migrate(Object.assign(fresh(), JSON.parse(json))); } catch (e) { } },
     freeze() { frozen = true; },
     importState(o, { silent = false } = {}) {
