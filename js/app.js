@@ -19,9 +19,9 @@
   document.addEventListener('keydown', e => { if (onKey && !e.ctrlKey && !e.metaKey && !e.altKey) onKey(e); });
 
   // ---------- картинки с Wikimedia Commons ----------
-  // Стенд: сначала своя копия на GitHub Pages (upload.wikimedia.org недоступен из части российских сетей),
+  // Сначала своя копия на GitHub Pages (upload.wikimedia.org недоступен из части российских сетей),
   // файл <md5prefix>/<imgKey>.webp, до 800 px; её делает tools/mirror_images.py. Если копии нет — Wikimedia.
-  const IMG = window.BETA ? 'https://scherbakovalexander.github.io/art-eye-img' : '';
+  const IMG = 'https://scherbakovalexander.github.io/art-eye-img';
   function imgKey(f) {   // FNV-1a 32 по UTF-16 кодам имени файла — как fnv() в mirror_images.py
     let h = 0x811c9dc5;
     for (let i = 0; i < f.length; i++) { h ^= f.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
@@ -63,7 +63,7 @@
     else if (w) { el.dataset.w = 0; el.src = url(p, 0, true); }
     else {
       // «битой» помечаем, только если другие картинки грузятся: иначе это сеть, а не файл
-      if (imgOk || !window.BETA) E.markBroken(p.id);
+      if (imgOk) E.markBroken(p.id);
       el.classList.add('broken');
     }
   }
