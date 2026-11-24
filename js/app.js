@@ -19,8 +19,20 @@
   document.addEventListener('keydown', e => { if (onKey && !e.ctrlKey && !e.metaKey && !e.altKey) onKey(e); });
 
   // ---------- картинки с Wikimedia Commons ----------
+  // Стенд: сначала своя копия на GitHub Pages (upload.wikimedia.org недоступен из части российских сетей),
+  // файл <md5prefix>/<imgKey>.webp, до 800 px; её делает tools/mirror_images.py. Если копии нет — Wikimedia.
+  const IMG = window.BETA ? 'https://scherbakovalexander.github.io/art-eye-img' : '';
+  function imgKey(f) {   // FNV-1a 32 по UTF-16 кодам имени файла — как fnv() в mirror_images.py
+    let h = 0x811c9dc5;
+    for (let i = 0; i < f.length; i++) { h ^= f.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16).padStart(8, '0');
+  }
+  // хоть одна картинка за этот заход загрузилась — значит сеть в порядке и ошибка у конкретного файла
+  let imgOk = false;
+  document.addEventListener('load', e => { if (e.target.tagName === 'IMG') imgOk = true; }, true);
   const SIZES = [960, 500, 330];
-  function url(p, w) {
+  function url(p, w, direct) {
+    if (IMG && !direct) return `${IMG}/${p.h}/${imgKey(p.f)}.webp`;
     const enc = encodeURIComponent(p.f);
     if (!w) return `https://commons.wikimedia.org/wiki/Special:FilePath/${enc}`;
     const thumb = /\.tiff?$/i.test(p.f) ? `lossy-page1-${w}px-${enc}.jpg` : `${w}px-${enc}`;
@@ -39,16 +51,21 @@
   function showPortrait(q) {
     const r = (window.PORTRAITS || {})[q]; if (!r) return;
     const el = document.createElement('div'); el.className = 'lightbox';
-    el.innerHTML = `<figure><img src="${url({ h: r[0], f: r[1] }, 500)}" alt="" onerror="this.src='${url({ h: r[0], f: r[1] }, 0)}'"><div class="cap"><b>${A[q].n}</b></div></figure>`;
+    el.innerHTML = `<figure><img src="${url({ h: r[0], f: r[1] }, 500)}" alt="" onerror="this.onerror=null; this.src='${url({ h: r[0], f: r[1] }, 0, true)}'"><div class="cap"><b>${A[q].n}</b></div></figure>`;
     el.onclick = () => el.remove();
     document.body.appendChild(el);
   }
   function imgErr(el) {
     const p = E.paintingById(el.dataset.id), w = +el.dataset.w;
+    if (IMG && !el.dataset.d) { el.dataset.d = 1; el.src = url(p, w, true); return; }   // копии нет — Wikimedia
     const next = SIZES.find(s => s < w);
-    if (w && next) { el.dataset.w = next; el.src = url(p, next); }
-    else if (w) { el.dataset.w = 0; el.src = url(p, 0); }
-    else { E.markBroken(p.id); el.classList.add('broken'); }
+    if (w && next) { el.dataset.w = next; el.src = url(p, next, true); }
+    else if (w) { el.dataset.w = 0; el.src = url(p, 0, true); }
+    else {
+      // «битой» помечаем, только если другие картинки грузятся: иначе это сеть, а не файл
+      if (imgOk || !window.BETA) E.markBroken(p.id);
+      el.classList.add('broken');
+    }
   }
   // ---------- увеличение картины щипком ----------
   // Щипок двумя пальцами по картине — она увеличивается поверх страницы и остаётся увеличенной;
@@ -75,7 +92,7 @@
       z = { ov, im, x: r.left, y: r.top, s: 1, tx: 0, ty: 0, g: null };
       // крупная версия — подгружается и подменяется незаметно
       const p = src.dataset.id && E.paintingById(src.dataset.id);
-      if (p && +src.dataset.w !== 0) { const hi = new Image(); hi.onload = () => { if (z && z.im === im) im.src = hi.src; }; hi.src = url(p, 1920); }
+      if (p && +src.dataset.w !== 0) { const hi = new Image(); hi.onload = () => { if (z && z.im === im) im.src = hi.src; }; hi.src = url(p, 1920, true); }
       src.style.visibility = 'hidden'; z.src = src;
       return true;
     }
@@ -296,7 +313,7 @@
   // портрет — первым крупным слайдом знакомства; если миниатюры нет — оригинал
   function portraitBig(q) {
     const r = PORTRAITS[q], p = { h: r[0], f: r[1] };
-    return `<img src="${url(p, 960)}" alt="" onerror="if (!this.dataset.o) { this.dataset.o = 1; this.src = '${url(p, 0)}'; }">`;
+    return `<img src="${url(p, 960)}" alt="" onerror="if (!this.dataset.o) { this.dataset.o = 1; this.src = '${url(p, 0, true)}'; }">`;
   }
   function intro(q) {
     const a = A[q], gal = E.introGallery(q, E.known().length <= E.WARMUP ? 6 : 8);
